@@ -48,12 +48,16 @@ elif MACHINE in ("arm64", "aarch64"):
 
 # Get version from npm package if available
 try:
-    npm_version = subprocess.check_output(
-        ["npm", "view", CDK_PACKAGE_NAME, "version"], 
-        text=True
-    ).strip()
-    version = npm_version
-    print(f"Using AWS CDK version {version} from npm")
+    if "CDK_VERSION" in os.environ:
+        version = os.environ["CDK_VERSION"]
+        print(f"Using AWS CDK version {version} from environment variable")
+    else:
+        npm_version = subprocess.check_output(
+            ["npm", "view", CDK_PACKAGE_NAME, "version"], 
+            text=True
+        ).strip()
+        version = npm_version
+        print(f"Using AWS CDK version {version} from npm")
 except (subprocess.SubprocessError, FileNotFoundError) as e:
     raise RuntimeError(
         f"Failed to get AWS CDK version from npm for package '{CDK_PACKAGE_NAME}'. "
