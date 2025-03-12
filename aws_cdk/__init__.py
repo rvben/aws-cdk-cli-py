@@ -79,11 +79,32 @@ NODE_BINARIES_DIR = os.path.join(PACKAGE_DIR, "node_binaries")
 # Platform-specific paths
 NODE_PLATFORM_DIR = os.path.join(NODE_BINARIES_DIR, SYSTEM, MACHINE)
 
+# Function to find the Node.js version directory
+def _find_node_version_dir():
+    """Find the Node.js version directory inside the platform directory."""
+    if not os.path.exists(NODE_PLATFORM_DIR):
+        return None
+    
+    # Look for directories that match the node-v* pattern
+    for item in os.listdir(NODE_PLATFORM_DIR):
+        if item.startswith('node-v') and os.path.isdir(os.path.join(NODE_PLATFORM_DIR, item)):
+            return item
+    
+    return None
+
 # Node.js binary path
 if SYSTEM == "windows":
-    NODE_BIN_PATH = os.path.join(NODE_PLATFORM_DIR, "node.exe")
+    _NODE_VERSION_DIR = _find_node_version_dir()
+    if _NODE_VERSION_DIR:
+        NODE_BIN_PATH = os.path.join(NODE_PLATFORM_DIR, _NODE_VERSION_DIR, "node.exe")
+    else:
+        NODE_BIN_PATH = os.path.join(NODE_PLATFORM_DIR, "node.exe")
 else:
-    NODE_BIN_PATH = os.path.join(NODE_PLATFORM_DIR, "bin", "node")
+    _NODE_VERSION_DIR = _find_node_version_dir() 
+    if _NODE_VERSION_DIR:
+        NODE_BIN_PATH = os.path.join(NODE_PLATFORM_DIR, _NODE_VERSION_DIR, "bin", "node")
+    else:
+        NODE_BIN_PATH = os.path.join(NODE_PLATFORM_DIR, "bin", "node")
 
 # CDK script path
 CDK_SCRIPT_PATH = os.path.join(NODE_MODULES_DIR, "aws-cdk", "bin", "cdk")

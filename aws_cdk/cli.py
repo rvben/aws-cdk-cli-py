@@ -14,7 +14,8 @@ from . import runtime
 from . import version
 
 from aws_cdk import (
-    NODE_BIN_PATH, CDK_SCRIPT_PATH, is_cdk_installed, is_node_installed,
+    NODE_BIN_PATH, CDK_SCRIPT_PATH, NODE_MODULES_DIR,
+    is_cdk_installed, is_node_installed,
     get_cdk_version, get_node_version, get_license_text, __version__,
     SYSTEM, MACHINE
 )
@@ -61,6 +62,7 @@ def run_cdk_command(args, capture_output=False, env=None):
             return 1
     
     # Construct the command: node cdk.js [args]
+    # The correct way to execute the CDK CLI is to run the script through Node.js
     cmd = [NODE_BIN_PATH, CDK_SCRIPT_PATH] + args
     
     # Set up environment variables
