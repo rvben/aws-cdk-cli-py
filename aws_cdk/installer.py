@@ -243,11 +243,21 @@ def download_node():
         # Extract the Node.js binaries
         if archive_ext == 'zip':
             with zipfile.ZipFile(temp_file, 'r') as zip_ref:
-                zip_ref.extractall(NODE_PLATFORM_DIR, filter='data')
+                # The filter parameter was added in Python 3.12
+                if sys.version_info >= (3, 12):
+                    zip_ref.extractall(NODE_PLATFORM_DIR, filter='data')
+                else:
+                    # For older Python versions, just use regular extractall
+                    zip_ref.extractall(NODE_PLATFORM_DIR)
         else:  # .tar.gz
             with tarfile.open(temp_file, 'r:gz') as tar_ref:
-                # Use 'data' filter to avoid the deprecation warning in Python 3.14+
-                tar_ref.extractall(NODE_PLATFORM_DIR, filter='data')
+                # The filter parameter was added in Python 3.12
+                if sys.version_info >= (3, 12):
+                    # Use 'data' filter to avoid the deprecation warning in Python 3.14+
+                    tar_ref.extractall(NODE_PLATFORM_DIR, filter='data')
+                else:
+                    # For older Python versions, just use regular extractall
+                    tar_ref.extractall(NODE_PLATFORM_DIR)
         
         logger.info(f"Node.js binaries extracted to {NODE_PLATFORM_DIR}")
         
@@ -396,7 +406,12 @@ def download_cdk():
             
             # Extract to a temporary directory first
             temp_dir = tempfile.mkdtemp()
-            tar_ref.extractall(temp_dir, filter='data')
+            # The filter parameter was added in Python 3.12
+            if sys.version_info >= (3, 12):
+                tar_ref.extractall(temp_dir, filter='data')
+            else:
+                # For older Python versions, just use regular extractall
+                tar_ref.extractall(temp_dir)
             
             # Now move the files to the right place
             if has_package_dir:
