@@ -1,0 +1,120 @@
+name: Monitor CDK Releases
+
+on:
+  schedule:
+    # Check for new releases every day at midnight UTC
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+    # Allow manual trigger
+
+jobs:
+  check-for-releases:
+    runs-on: ubuntu-latest
+    outputs:
+      update_needed: ${{ steps.check-update.outputs.update_needed }}
+      npm_version: ${{ steps.npm-version.outputs.npm_version }}
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      
+      - name: Get latest CDK version from npm
+        id: npm-version
+        run: |
+          NPM_VERSION=$(npm view aws-cdk version)
+          echo "Latest aws-cdk version: $NPM_VERSION"
+          echo "npm_version=$NPM_VERSION" >> $GITHUB_OUTPUT
+      
+      - name: Get current package version
+        id: package-version
+        run: |
+          # Get version from version.py if it exists
+          if [ -f "aws_cdk/version.py" ]; then
+            CURRENT_VERSION=$(grep -oP "__version__\s*=\s*['\"]([^'\"]+)" aws_cdk/version.py | cut -d'"' -f2 | cut -d"'" -f2)
+          elif [ -f "setup.py" ]; then
+            # Extract version from setup.py if version.py doesn't exist
+            CURRENT_VERSION=$(grep -oP "version\s*=\s*['\"]([^'\"]+)" setup.py | cut -d'"' -f2 | cut -d"'" -f2)
+          else
+            CURRENT_VERSION="0.0.0"
+          fi
+          echo "Current package version: $CURRENT_VERSION"
+          echo "package_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+      
+      - name: Check if update needed
+        id: check-update
+        run: |
+          NPM_VERSION="${{ steps.npm-version.outputs.npm_version }}"
+          CURRENT_VERSION="${{ steps.package-version.outputs.package_version }}"
+          
+          # Verify that NPM_VERSION is a valid version format (e.g., 1.2.3)
+          if ! [[ $NPM_VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$ ]]; then
+            echo "Error: Invalid NPM version format: $NPM_VERSION"
+            echo "update_needed=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Compare versions 
+          if [ "$NPM_VERSION" != "$CURRENT_VERSION" ]; then
+            echo "Update needed from $CURRENT_VERSION to $NPM_VERSION"
+            echo "update_needed=true" >> $GITHUB_OUTPUT
+          else
+            echo "No update needed, versions match: $CURRENT_VERSION"
+            echo "update_needed=false" >> $GITHUB_OUTPUT
+          fi
+
+  trigger-update:
+    needs: check-for-releases
+    if: needs.check-for-releases.outputs.update_needed == 'true'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Trigger update workflow
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          event-type: aws-cdk-release
+          client-payload: '{"version": "${{ needs.check-for-releases.outputs.npm_version }}"}'
+      
+      - name: Log update
+        run: |
+          echo "Triggered update to AWS CDK version ${{ needs.check-for-releases.outputs.npm_version }}"
+  
+  verify-versions:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      
+      - name: Verify CDK version integrity
+        run: |
+          NPM_VERSION=$(npm view aws-cdk version)
+          
+          # Verify NPM version against official registry
+          NPM_REGISTRY_VERSION=$(curl -s https://registry.npmjs.org/aws-cdk/latest | grep -o '"version":"[^"]*"' | cut -d'"' -f4)
+          
+          if [ "$NPM_VERSION" != "$NPM_REGISTRY_VERSION" ]; then
+            echo "Warning: Version mismatch between npm ($NPM_VERSION) and registry ($NPM_REGISTRY_VERSION)"
+            exit 1
+          fi
+          
+          # Check GitHub release tags as another verification
+          GITHUB_VERSION=$(curl -s https://api.github.com/repos/aws/aws-cdk/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' | cut -c 2-)
+          
+          if [ "$NPM_VERSION" != "$GITHUB_VERSION" ]; then
+            echo "Warning: Version mismatch between npm ($NPM_VERSION) and GitHub releases ($GITHUB_VERSION)"
+            exit 1
+          fi
+          
+          echo "All version checks passed. Latest CDK version: $NPM_VERSION" 

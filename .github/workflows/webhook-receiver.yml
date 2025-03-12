@@ -1,0 +1,27 @@
+name: AWS CDK Release Webhook Receiver
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'CDK Release Version'
+        required: true
+        default: ''
+  watch:
+    types: [started]
+
+jobs:
+  process-webhook:
+    # Only run this job if the user that triggered it is an admin
+    if: github.event_name == 'workflow_dispatch' || github.actor == github.repository_owner
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch update event
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+          event-type: aws-cdk-release
+          client-payload: |
+            {
+              "release_version": "${{ github.event.inputs.release_version }}"
+            } 
