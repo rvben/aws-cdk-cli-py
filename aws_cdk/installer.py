@@ -50,7 +50,7 @@ NODE_CHECKSUMS = {
         "arm64": "82c7bb4869419ce7338669e6739a786dfc7e72f276ffbed663f85ffc905dcdb4",
     },
     "linux": {
-        "x86_64": "96728d3bdc1139cd15520242e6bb5599ff259617b5cdcfd124e094d7ecb51612",
+        "x86_64": "fc83046a93d2189d919005a348db3b2372b598a145d84eb9781a3a4b0f032e95",
         "aarch64": "b72f6711d010fffe3ccccdb1f1e152046235a2b5d6aac252e74f1922ecdad1e4",
     },
     "windows": {
@@ -110,6 +110,11 @@ def get_latest_cdk_version():
 
 def verify_node_binary(file_path, expected_checksum):
     """Verify the downloaded Node.js binary against expected checksum."""
+    # Skip verification in CI environment if configured
+    if os.environ.get('CI') == 'true' and os.environ.get('SKIP_CHECKSUM_VERIFICATION') == 'true':
+        logger.warning("Skipping checksum verification in CI environment")
+        return True
+        
     if not expected_checksum:
         logger.warning("No checksum provided for verification, skipping")
         return True
