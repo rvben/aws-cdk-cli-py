@@ -96,9 +96,22 @@ def _find_node_version_dir():
 if SYSTEM == "windows":
     _NODE_VERSION_DIR = _find_node_version_dir()
     if _NODE_VERSION_DIR:
+        # Windows Node.js ZIP has the executable in the root of the extracted folder
         NODE_BIN_PATH = os.path.join(NODE_PLATFORM_DIR, _NODE_VERSION_DIR, "node.exe")
     else:
-        NODE_BIN_PATH = os.path.join(NODE_PLATFORM_DIR, "node.exe")
+        # Check both possible locations for the Windows executable
+        direct_path = os.path.join(NODE_PLATFORM_DIR, "node.exe")
+        if os.path.exists(direct_path):
+            NODE_BIN_PATH = direct_path
+        else:
+            # We'll need to find the executable in extracted subdirectories
+            for root, dirs, files in os.walk(NODE_PLATFORM_DIR):
+                if "node.exe" in files:
+                    NODE_BIN_PATH = os.path.join(root, "node.exe")
+                    break
+            else:
+                # Fallback to the default location if not found
+                NODE_BIN_PATH = os.path.join(NODE_PLATFORM_DIR, "node.exe")
 else:
     _NODE_VERSION_DIR = _find_node_version_dir() 
     if _NODE_VERSION_DIR:
@@ -107,7 +120,14 @@ else:
         NODE_BIN_PATH = os.path.join(NODE_PLATFORM_DIR, "bin", "node")
 
 # CDK script path
-CDK_SCRIPT_PATH = os.path.join(NODE_MODULES_DIR, "aws-cdk", "bin", "cdk")
+if SYSTEM == "windows":
+    # On Windows, the CDK script is named 'cdk.cmd'
+    CDK_SCRIPT_PATH = os.path.join(NODE_MODULES_DIR, "aws-cdk", "bin", "cdk.cmd")
+    # If cdk.cmd doesn't exist, fall back to 'cdk'
+    if not os.path.exists(CDK_SCRIPT_PATH):
+        CDK_SCRIPT_PATH = os.path.join(NODE_MODULES_DIR, "aws-cdk", "bin", "cdk")
+else:
+    CDK_SCRIPT_PATH = os.path.join(NODE_MODULES_DIR, "aws-cdk", "bin", "cdk")
 
 # License paths
 LICENSES = {
@@ -121,7 +141,17 @@ def is_cdk_installed():
 
 def is_node_installed():
     """Check if Node.js is installed in the package directory."""
-    return os.path.exists(NODE_BIN_PATH)
+    if not os.path.exists(NODE_BIN_PATH):
+        # If the path doesn't exist, let's try to find node.exe on Windows
+        if SYSTEM == "windows":
+            for root, dirs, files in os.walk(NODE_PLATFORM_DIR):
+                if "node.exe" in files:
+                    global NODE_BIN_PATH
+                    NODE_BIN_PATH = os.path.join(root, "node.exe")
+                    break
+    
+    # Now check if the binary exists and is executable (file exists and has size > 0)
+    return os.path.exists(NODE_BIN_PATH) and os.path.getsize(NODE_BIN_PATH) > 0
 
 def get_cdk_version():
     """Get the installed CDK version."""

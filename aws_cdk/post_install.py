@@ -9,6 +9,7 @@ import os
 import sys
 import logging
 import platform
+import subprocess
 import shutil
 import urllib.request
 import tempfile
@@ -194,11 +195,21 @@ def download_node():
         # Extract the Node.js binaries
         if node_url.endswith('.zip'):
             with zipfile.ZipFile(temp_file.name, 'r') as zip_ref:
-                zip_ref.extractall(extract_dir, filter='data')
+                # The filter parameter was added in Python 3.12
+                if sys.version_info >= (3, 12):
+                    zip_ref.extractall(extract_dir, filter='data')
+                else:
+                    # For older Python versions, just use regular extractall
+                    zip_ref.extractall(extract_dir)
         else:  # .tar.gz
             with tarfile.open(temp_file.name, 'r:gz') as tar_ref:
-                # Use 'data' filter to avoid the deprecation warning in Python 3.14+
-                tar_ref.extractall(extract_dir, filter='data')
+                # The filter parameter was added in Python 3.12
+                if sys.version_info >= (3, 12):
+                    # Use 'data' filter to avoid the deprecation warning in Python 3.14+
+                    tar_ref.extractall(extract_dir, filter='data')
+                else:
+                    # For older Python versions, just use regular extractall
+                    tar_ref.extractall(extract_dir)
         
         logger.info(f"Node.js binaries downloaded and extracted to {extract_dir}")
         return True

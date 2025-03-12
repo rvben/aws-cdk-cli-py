@@ -75,11 +75,12 @@ def clean_environment():
 def test_node_download():
     """Test that Node.js is downloaded automatically when needed."""
     import aws_cdk
-    from aws_cdk.post_install import download_node
+    from aws_cdk.installer import download_node
     from aws_cdk.runtime import get_node_path
     
     # Force a download
-    assert download_node(), "Node.js download failed"
+    success, error = download_node()
+    assert success, f"Node.js download failed: {error}"
     
     # Check that the binary exists
     node_path = get_node_path()
@@ -102,7 +103,8 @@ def test_cdk_download():
     from aws_cdk.installer import install_cdk
     
     # Force a download
-    assert install_cdk(), "AWS CDK download failed"
+    success, error = install_cdk()
+    assert success, f"AWS CDK download failed: {error}"
     
     # Check that the script exists
     assert hasattr(aws_cdk, "CDK_SCRIPT_PATH"), "CDK_SCRIPT_PATH not defined"

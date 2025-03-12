@@ -39,19 +39,37 @@ def get_node_path():
     if not os.path.exists(node_binaries_dir):
         return None
     
-    node_dirs = [d for d in os.listdir(node_binaries_dir) if d.startswith("node-")]
-    if not node_dirs:
-        return None
+    # Look for node-vX.Y.Z directories
+    for item in os.listdir(node_binaries_dir):
+        if item.startswith('node-v') and os.path.isdir(os.path.join(node_binaries_dir, item)):
+            # We found a Node.js version directory
+            if SYSTEM == "windows":
+                # On Windows, node.exe is in the root of the extracted directory
+                node_exe = os.path.join(node_binaries_dir, item, "node.exe")
+                if os.path.exists(node_exe):
+                    return node_exe
+            else:
+                # On Unix systems, node is in the bin subdirectory
+                node_bin = os.path.join(node_binaries_dir, item, "bin", "node")
+                if os.path.exists(node_bin):
+                    return node_bin
     
-    node_dir = node_dirs[0]  # Take the first Node.js directory
-    
-    # Determine the path to the node executable
+    # If we couldn't find a version directory, check for the binary directly
     if SYSTEM == "windows":
-        node_path = os.path.join(node_binaries_dir, node_dir, "node.exe")
+        node_exe = os.path.join(node_binaries_dir, "node.exe")
+        if os.path.exists(node_exe):
+            return node_exe
+            
+        # As a last resort, search for node.exe in the directory tree
+        for root, dirs, files in os.walk(node_binaries_dir):
+            if "node.exe" in files:
+                return os.path.join(root, "node.exe")
     else:
-        node_path = os.path.join(node_binaries_dir, node_dir, "bin", "node")
+        node_bin = os.path.join(node_binaries_dir, "bin", "node")
+        if os.path.exists(node_bin):
+            return node_bin
     
-    return node_path if os.path.exists(node_path) else None
+    return None
 
 def get_system_node_path():
     """Get the path to the system Node.js executable."""
@@ -59,17 +77,32 @@ def get_system_node_path():
     return shutil.which(executable)
 
 def get_cdk_path():
-    """Get the path to the bundled CDK CLI executable."""
+    """Get the path to the CDK executable."""
     package_dir = get_package_dir()
-    node_modules_dir = os.path.join(package_dir, "node_modules")
+    cdk_dir = os.path.join(package_dir, "node_modules", CDK_PACKAGE_NAME)
     
-    # Determine the path to the CDK CLI executable
+    if not os.path.exists(cdk_dir):
+        return None
+    
+    # Check for the CDK executable
     if SYSTEM == "windows":
-        cdk_path = os.path.join(node_modules_dir, CDK_PACKAGE_NAME, "bin", "cdk.js")
+        # On Windows, check for cdk.cmd first, then cdk
+        cdk_cmd = os.path.join(cdk_dir, "bin", "cdk.cmd")
+        if os.path.exists(cdk_cmd):
+            return cdk_cmd
+            
+        # Also check for cdk.js and cdk in case of different packaging
+        for cdk_name in ["cdk", "cdk.js"]:
+            cdk_path = os.path.join(cdk_dir, "bin", cdk_name)
+            if os.path.exists(cdk_path):
+                return cdk_path
     else:
-        cdk_path = os.path.join(node_modules_dir, CDK_PACKAGE_NAME, "bin", "cdk")
+        # On Unix systems, check for cdk
+        cdk_path = os.path.join(cdk_dir, "bin", "cdk")
+        if os.path.exists(cdk_path):
+            return cdk_path
     
-    return cdk_path if os.path.exists(cdk_path) else None
+    return None
 
 def ensure_node_installed():
     """Ensure Node.js is installed and available."""
