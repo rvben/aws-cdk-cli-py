@@ -108,16 +108,11 @@ def test_cli_basic_commands(cmd):
             mock_proc.stdout = "Mock CDK help output"
             mock_run.return_value = (0, mock_proc.stdout, "")
         
-        # Run the command through our CLI module
+        # Run the command through our CLI module by patching sys.argv
         import aws_cdk.cli
-        if cmd[0] == "--version":
-            result = aws_cdk.cli.main(cmd)
-            assert result == 0, "Version command failed"
-        else:
-            # For help, we need to capture output
-            with patch('sys.argv', ['aws_cdk'] + cmd):
-                result = aws_cdk.cli.main([])
-                assert result == 0, "Help command failed"
+        with patch('sys.argv', ['aws_cdk'] + cmd):
+            result = aws_cdk.cli.main()
+            assert result == 0, f"{cmd[0]} command failed"
 
 @pytest.mark.slow
 def test_cdk_init_app():
@@ -141,8 +136,9 @@ def test_cdk_init_app():
                 
                 # Run the mock init command
                 import aws_cdk.cli
-                result = aws_cdk.cli.main(["init", "app", "--language=python"])
-                assert result == 0, "Init command failed"
+                with patch('sys.argv', ['aws_cdk', 'init', 'app', '--language=python']):
+                    result = aws_cdk.cli.main()
+                    assert result == 0, "Init command failed"
             
             # Check expected files
             for file in expected_files:
@@ -194,8 +190,9 @@ class HelloStack(Stack):
                 
                 # Run the synth command
                 import aws_cdk.cli
-                result = aws_cdk.cli.main(["synth"])
-                assert result == 0, "Synth command failed"
+                with patch('sys.argv', ['aws_cdk', 'synth']):
+                    result = aws_cdk.cli.main()
+                    assert result == 0, "Synth command failed"
             
             # Check if cdk.out directory was created
             assert os.path.exists("cdk.out"), "cdk.out directory not created"
