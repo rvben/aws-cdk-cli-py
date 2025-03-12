@@ -59,7 +59,7 @@ NODE_CHECKSUMS = {
 }
 
 # Cache directory for downloads
-CACHE_DIR = os.path.join(os.path.expanduser("~"), ".aws-cdk-wrapper", "cache")
+CACHE_DIR = os.path.join(os.path.expanduser("~"), ".cache", "aws-cdk-wrapper")
 
 def check_npm_available():
     """Check if npm is available on the system."""
@@ -240,23 +240,48 @@ def download_node():
                     # No top-level directory, extract directly
                     tar_ref.extractall(NODE_PLATFORM_DIR)
         
-        # Get the extracted directory name (e.g., node-v18.16.0-darwin-arm64)
-        extracted_dir_pattern = f"node-v{NODE_VERSION}-{SYSTEM}-{machine}"
-        extracted_dir = os.path.join(NODE_PLATFORM_DIR, extracted_dir_pattern)
+        # Determine the actual extracted directory name
+        if SYSTEM == 'linux':
+            # Linux has different naming patterns
+            extracted_dir_pattern = f"node-v{NODE_VERSION}-linux-x64"
+        else:
+            extracted_dir_pattern = f"node-v{NODE_VERSION}-{SYSTEM}-{machine}"
         
-        # Create symlinks to the bin directory for easier access
-        if SYSTEM != "windows" and os.path.exists(os.path.join(extracted_dir, "bin", "node")):
-            # Create bin directory if it doesn't exist
-            bin_dir = os.path.join(NODE_PLATFORM_DIR, "bin")
-            os.makedirs(bin_dir, exist_ok=True)
-            
+        extracted_dir = None
+        # Look for the directory that matches our pattern
+        for item in os.listdir(NODE_PLATFORM_DIR):
+            item_path = os.path.join(NODE_PLATFORM_DIR, item)
+            if os.path.isdir(item_path) and item.startswith("node-v"):
+                extracted_dir = item_path
+                break
+        
+        # Create bin directory if it doesn't exist
+        bin_dir = os.path.join(NODE_PLATFORM_DIR, "bin")
+        os.makedirs(bin_dir, exist_ok=True)
+        
+        # Create symlink to node binary or copy the executable
+        if SYSTEM != "windows" and extracted_dir and os.path.exists(os.path.join(extracted_dir, "bin", "node")):
             # Create symlink to node binary
             node_symlink = os.path.join(bin_dir, "node")
-            if not os.path.exists(node_symlink):
+            if os.path.exists(node_symlink):
+                os.remove(node_symlink)
+                
+            try:
+                # Try symlink first
                 os.symlink(
                     os.path.join(extracted_dir, "bin", "node"),
                     node_symlink
                 )
+            except (OSError, AttributeError):
+                # If symlink fails, copy the file
+                shutil.copy2(
+                    os.path.join(extracted_dir, "bin", "node"),
+                    node_symlink
+                )
+                # Make it executable
+                os.chmod(node_symlink, 0o755)
+            
+            logger.info(f"Created node executable at {node_symlink}")
         
         # Make node executable on Unix-like systems
         if SYSTEM != "windows" and os.path.exists(NODE_BIN_PATH):

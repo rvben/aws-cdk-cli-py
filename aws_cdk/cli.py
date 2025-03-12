@@ -95,11 +95,17 @@ def show_versions(verbose=False):
     
     # Show bundled CDK version
     cdk_version = get_cdk_version()
-    print(f"AWS CDK: v{cdk_version or 'not installed'}")
+    if cdk_version:
+        print(f"AWS CDK: v{cdk_version}")
+    else:
+        print("AWS CDK: not installed")
     
     # Show bundled Node.js version
     node_version = get_node_version()
-    print(f"Node.js: v{node_version or 'not installed'}")
+    if node_version:
+        print(f"Node.js: v{node_version}")
+    else:
+        print("Node.js: not installed")
     
     # Platform information
     print(f"Platform: {SYSTEM}-{MACHINE}")
