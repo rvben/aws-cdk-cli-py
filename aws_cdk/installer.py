@@ -137,9 +137,11 @@ def download_node():
     """Download Node.js binaries for the current platform."""
     try:
         node_url = NODE_URLS[SYSTEM][MACHINE]
+        expected_checksum = NODE_CHECKSUMS.get(SYSTEM, {}).get(MACHINE)
     except KeyError:
-        logger.error(f"Unsupported platform: {SYSTEM}-{MACHINE}")
-        return False
+        error_msg = f"Unsupported platform: {SYSTEM}-{MACHINE}"
+        logger.error(error_msg)
+        return False, error_msg
     
     logger.info(f"Downloading Node.js v{NODE_VERSION} for {SYSTEM}-{MACHINE}...")
     
@@ -185,16 +187,17 @@ def download_node():
             # Cache the downloaded archive for future use
             shutil.copy(temp_file, cached_archive)
             logger.info(f"Cached Node.js binaries to: {cached_archive}")
-            return temp_file
+            return temp_file, None
             
         except Exception as e:
-            logger.error(f"Failed to download Node.js: {e}")
+            error_msg = f"Failed to download Node.js: {e}"
+            logger.error(error_msg)
             if os.path.exists(temp_file):
                 try:
                     os.unlink(temp_file)
                 except Exception:
                     pass
-            return None
+            return None, error_msg
     
     def is_valid_archive(file_path):
         """Check if the file is a valid archive."""
@@ -227,14 +230,14 @@ def download_node():
                 logger.warning(f"Failed to delete invalid cache file: {e}")
             
             # Download a fresh copy
-            temp_file = download_fresh_copy()
+            temp_file, error = download_fresh_copy()
             if not temp_file:
-                return False
+                return False, error
     else:
         # Download a fresh copy
-        temp_file = download_fresh_copy()
+        temp_file, error = download_fresh_copy()
         if not temp_file:
-            return False
+            return False, error
     
     try:
         # Extract the Node.js binaries
@@ -255,21 +258,30 @@ def download_node():
             except Exception as e:
                 logger.warning(f"Could not delete temporary file {temp_file}: {e}")
         
-        return True
+        # Verify the binary exists
+        if not os.path.exists(NODE_BIN_PATH):
+            error_msg = f"Node binary not found at expected path: {NODE_BIN_PATH}"
+            logger.error(error_msg)
+            return False, error_msg
+            
+        return True, None
     except Exception as e:
-        logger.error(f"Failed to extract Node.js binaries: {e}")
-        return False
+        error_msg = f"Failed to extract Node.js binaries: {e}"
+        logger.error(error_msg)
+        return False, error_msg
 
 def download_cdk():
     """Download and bundle the AWS CDK code."""
     if is_cdk_installed():
         logger.info("AWS CDK is already installed")
-        return True
+        return True, None
     
     if not is_node_installed():
-        if not download_node():
-            logger.error("Failed to download Node.js. Cannot install CDK.")
-            return False
+        success, error = download_node()
+        if not success:
+            error_msg = f"Failed to download Node.js. Cannot install CDK. Error: {error}"
+            logger.error(error_msg)
+            return False, error_msg
     
     logger.info("Downloading AWS CDK...")
     
@@ -310,10 +322,11 @@ def download_cdk():
             # Cache the file for future use
             shutil.copy(tar_file, cached_tar)
             logger.info(f"Cached AWS CDK package to: {cached_tar}")
-            return tar_file
+            return tar_file, None
             
         except Exception as e:
-            logger.error(f"Failed to download AWS CDK using npm: {e}")
+            error_msg = f"Failed to download AWS CDK using npm: {e}"
+            logger.error(error_msg)
             
             # Fallback: try to download directly from npm registry
             try:
@@ -326,13 +339,15 @@ def download_cdk():
                     with open(cached_tar, 'wb') as f:
                         f.write(response.content)
                     logger.info(f"Downloaded AWS CDK package directly to: {cached_tar}")
-                    return cached_tar
+                    return cached_tar, None
                 else:
-                    logger.error(f"Failed to download AWS CDK: HTTP {response.status_code}")
-                    return None
+                    error_msg = f"Failed to download AWS CDK: HTTP {response.status_code}"
+                    logger.error(error_msg)
+                    return None, error_msg
             except Exception as e:
-                logger.error(f"Failed to download AWS CDK directly: {e}")
-                return None
+                error_msg = f"Failed to download AWS CDK directly: {e}"
+                logger.error(error_msg)
+                return None, error_msg
     
     def is_valid_tarball(file_path):
         """Check if the file is a valid tarball."""
@@ -360,14 +375,14 @@ def download_cdk():
                 logger.warning(f"Failed to delete invalid cache file: {e}")
             
             # Download a fresh copy
-            tar_file = download_fresh_cdk_copy()
+            tar_file, error = download_fresh_cdk_copy()
             if not tar_file:
-                return False
+                return False, error
     else:
         # Download a fresh copy
-        tar_file = download_fresh_cdk_copy()
+        tar_file, error = download_fresh_cdk_copy()
         if not tar_file:
-            return False
+            return False, error
     
     try:
         # Extract the package
@@ -413,31 +428,42 @@ def download_cdk():
         with open(metadata_path, 'w') as f:
             json.dump(metadata, f, indent=2)
         
+        # Verify the CDK script exists
+        if not os.path.exists(CDK_SCRIPT_PATH):
+            error_msg = f"CDK script not found at expected path: {CDK_SCRIPT_PATH}"
+            logger.error(error_msg)
+            return False, error_msg
+        
         logger.info(f"AWS CDK {version} downloaded and installed")
-        return True
+        return True, None
     except Exception as e:
-        logger.error(f"Failed to extract AWS CDK package: {e}")
-        return False
+        error_msg = f"Failed to extract AWS CDK package: {e}"
+        logger.error(error_msg)
+        return False, error_msg
 
 def install_cdk():
     """Install AWS CDK using bundled Node.js."""
     if is_cdk_installed():
         logger.info("AWS CDK is already installed")
-        return True
+        return True, None
     
     # First, ensure Node.js is installed
     if not is_node_installed():
-        if not download_node():
-            logger.error("Failed to download Node.js. Cannot install CDK.")
-            return False
+        success, error = download_node()
+        if not success:
+            error_msg = f"Failed to download Node.js. Cannot install CDK. Error: {error}"
+            logger.error(error_msg)
+            return False, error_msg
     
     # Then, download and install CDK
-    if not download_cdk():
-        logger.error("Failed to download AWS CDK")
-        return False
+    success, error = download_cdk()
+    if not success:
+        error_msg = f"Failed to download AWS CDK. Error: {error}"
+        logger.error(error_msg)
+        return False, error_msg
     
     logger.info("AWS CDK installed successfully")
-    return True
+    return True, None
 
 def update_cdk():
     """Update AWS CDK to the latest version."""
@@ -446,36 +472,55 @@ def update_cdk():
     # Get the latest version
     latest_version = get_latest_cdk_version()
     if not latest_version:
-        logger.error("Failed to determine latest AWS CDK version")
-        return False
+        error_msg = "Failed to determine latest AWS CDK version"
+        logger.error(error_msg)
+        return False, error_msg
     
-    # Check current version
-    current_version = None
-    metadata_path = os.path.join(NODE_MODULES_DIR, "aws-cdk", "metadata.json")
-    if os.path.exists(metadata_path):
+    # Check current version if installed
+    if is_cdk_installed():
         try:
-            with open(metadata_path, 'r') as f:
-                metadata = json.load(f)
-                current_version = metadata.get("cdk_version")
-        except Exception:
-            pass
+            metadata_path = os.path.join(NODE_MODULES_DIR, "aws-cdk", "metadata.json")
+            if os.path.exists(metadata_path):
+                with open(metadata_path, 'r') as f:
+                    metadata = json.load(f)
+                    current_version = metadata.get("cdk_version")
+                    
+                    if current_version == latest_version:
+                        logger.info(f"AWS CDK is already at latest version {latest_version}")
+                        return True, None
+                    
+                    logger.info(f"Updating AWS CDK from {current_version} to {latest_version}")
+        except Exception as e:
+            logger.warning(f"Failed to check current CDK version: {e}")
     
-    if current_version == latest_version:
-        logger.info(f"AWS CDK is already at the latest version ({latest_version})")
-        return True
+    # First, ensure Node.js is installed
+    if not is_node_installed():
+        success, error = download_node()
+        if not success:
+            error_msg = f"Failed to download Node.js. Cannot update CDK. Error: {error}"
+            logger.error(error_msg)
+            return False, error_msg
     
     # Remove existing CDK installation
     cdk_dir = os.path.join(NODE_MODULES_DIR, "aws-cdk")
     if os.path.exists(cdk_dir):
-        shutil.rmtree(cdk_dir)
+        try:
+            shutil.rmtree(cdk_dir)
+            logger.info("Removed existing AWS CDK installation")
+        except Exception as e:
+            error_msg = f"Failed to remove existing AWS CDK installation: {e}"
+            logger.error(error_msg)
+            return False, error_msg
     
-    # Download and install the latest version
-    if download_cdk():
-        logger.info(f"AWS CDK updated to version {latest_version}")
-        return True
-    else:
-        logger.error("Failed to update AWS CDK")
-        return False
+    # Download and install CDK
+    success, error = download_cdk()
+    if not success:
+        error_msg = f"Failed to download AWS CDK. Error: {error}"
+        logger.error(error_msg)
+        return False, error_msg
+    
+    logger.info(f"AWS CDK updated to version {latest_version}")
+    return True, None
 
 def main():
     """Main function for installer script."""

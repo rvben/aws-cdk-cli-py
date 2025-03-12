@@ -42,14 +42,22 @@ def run_cdk_command(args, capture_output=False, env=None):
     # Ensure Node.js and CDK are installed
     if not is_node_installed():
         logger.info("Node.js is not installed. Installing...")
-        if not download_node():
-            logger.error("Failed to install Node.js. Cannot run CDK commands.")
+        success, error = download_node()
+        if not success:
+            error_msg = f"Failed to install Node.js. Cannot run CDK commands. Error: {error}"
+            logger.error(error_msg)
+            if capture_output:
+                return 1, "", error_msg
             return 1
     
     if not is_cdk_installed():
         logger.info("AWS CDK is not installed. Installing...")
-        if not install_cdk():
-            logger.error("Failed to install AWS CDK.")
+        success, error = install_cdk()
+        if not success:
+            error_msg = f"Failed to install AWS CDK. Error: {error}"
+            logger.error(error_msg)
+            if capture_output:
+                return 1, "", error_msg
             return 1
     
     # Construct the command: node cdk.js [args]
@@ -80,10 +88,16 @@ def run_cdk_command(args, capture_output=False, env=None):
             process = subprocess.run(cmd, env=process_env)
             return process.returncode
     except subprocess.SubprocessError as e:
-        logger.error(f"Error executing CDK command: {e}")
+        error_msg = f"Error executing CDK command: {e}"
+        logger.error(error_msg)
+        if capture_output:
+            return 1, "", error_msg
         return 1
     except FileNotFoundError:
-        logger.error(f"Node.js or CDK executable not found")
+        error_msg = "Node.js or CDK executable not found"
+        logger.error(error_msg)
+        if capture_output:
+            return 1, "", error_msg
         return 1
 
 def show_versions(verbose=False):
