@@ -150,8 +150,16 @@ class PostInstallCommand(install):
         self.execute(self._post_install, [], msg="Running post-installation script...")
     
     def _post_install(self):
-        import aws_cdk.post_install
-        aws_cdk.post_install.main()
+        # Instead of importing aws_cdk directly, run the post_install script directly
+        # This avoids the chicken-and-egg problem during installation
+        post_install_script = os.path.join(self.install_lib, "aws_cdk", "post_install.py")
+        if os.path.exists(post_install_script):
+            # Make the script executable
+            os.chmod(post_install_script, 0o755)
+            # Run the script with the current Python interpreter
+            subprocess.check_call([sys.executable, post_install_script])
+        else:
+            print(f"Warning: Post-installation script not found at {post_install_script}")
 
 # Custom develop command that runs post-install script
 class PostDevelopCommand(develop):
@@ -161,8 +169,13 @@ class PostDevelopCommand(develop):
         self.execute(self._post_install, [], msg="Running post-installation script...")
     
     def _post_install(self):
-        import aws_cdk.post_install
-        aws_cdk.post_install.main()
+        # Same approach as in PostInstallCommand
+        post_install_script = os.path.join(self.install_lib, "aws_cdk", "post_install.py")
+        if os.path.exists(post_install_script):
+            os.chmod(post_install_script, 0o755)
+            subprocess.check_call([sys.executable, post_install_script])
+        else:
+            print(f"Warning: Post-installation script not found at {post_install_script}")
 
 setup(
     name=CDK_PACKAGE_NAME,

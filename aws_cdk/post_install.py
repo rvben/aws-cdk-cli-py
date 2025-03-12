@@ -19,13 +19,38 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Fallback constants in case we can't import from aws_cdk
+# Platform detection (duplicated from aws_cdk.__init__)
+SYSTEM = platform.system().lower()
+MACHINE = platform.machine().lower()
+
+# Normalize machine architecture
+if MACHINE in ("amd64", "x86_64"):
+    MACHINE = "x86_64"
+elif MACHINE in ("arm64", "aarch64"):
+    MACHINE = "aarch64" if SYSTEM == "linux" else "arm64"
+
+# Get package directory
+PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Define license paths as fallback
+LICENSES = {
+    "aws_cdk": os.path.join(PACKAGE_DIR, "licenses", "aws_cdk", "LICENSE"),
+    "node": os.path.join(PACKAGE_DIR, "licenses", "node", "LICENSE"),
+}
+
 def create_license_notices():
     """
     Create license notice files in the installation directory.
     This ensures license texts are available even if they weren't included in the distribution.
     """
     try:
-        from aws_cdk import PACKAGE_DIR, LICENSES
+        # Try to import from aws_cdk first, then fall back to local definitions
+        try:
+            from aws_cdk import PACKAGE_DIR, LICENSES
+        except ImportError:
+            # Already defined above as fallback
+            pass
         
         # AWS CDK License - Apache 2.0
         cdk_license_path = LICENSES.get("aws_cdk")
@@ -87,6 +112,91 @@ def create_license_notices():
     except Exception as e:
         logger.warning(f"Failed to create license notices: {e}")
 
+# Fallback functions in case we can't import from aws_cdk.installer
+def is_node_installed():
+    """Fallback function to check if Node.js is installed."""
+    try:
+        from aws_cdk import is_node_installed
+        return is_node_installed()
+    except ImportError:
+        # Fallback implementation
+        node_bin_path = get_node_bin_path()
+        return os.path.exists(node_bin_path)
+
+def is_cdk_installed():
+    """Fallback function to check if AWS CDK is installed."""
+    try:
+        from aws_cdk import is_cdk_installed
+        return is_cdk_installed()
+    except ImportError:
+        # Fallback implementation
+        cdk_script_path = get_cdk_script_path()
+        return os.path.exists(cdk_script_path)
+
+def get_node_bin_path():
+    """Fallback function to get Node.js binary path."""
+    try:
+        from aws_cdk import NODE_BIN_PATH
+        return NODE_BIN_PATH
+    except ImportError:
+        # Fallback implementation
+        node_binaries_dir = os.path.join(PACKAGE_DIR, "node_binaries", SYSTEM, MACHINE)
+        if SYSTEM == "windows":
+            return os.path.join(node_binaries_dir, "node.exe")
+        else:
+            return os.path.join(node_binaries_dir, "bin", "node")
+
+def get_cdk_script_path():
+    """Fallback function to get CDK script path."""
+    try:
+        from aws_cdk import CDK_SCRIPT_PATH
+        return CDK_SCRIPT_PATH
+    except ImportError:
+        # Fallback implementation
+        return os.path.join(PACKAGE_DIR, "node_modules", "aws-cdk", "bin", "cdk.js")
+
+def download_node():
+    """Fallback function to download Node.js."""
+    try:
+        from aws_cdk.installer import download_node
+        return download_node()
+    except ImportError:
+        logger.error("Could not import download_node from aws_cdk.installer")
+        logger.info("Attempting to run the installer script directly...")
+        installer_script = os.path.join(PACKAGE_DIR, "installer.py")
+        if os.path.exists(installer_script):
+            try:
+                result = subprocess.run(
+                    [sys.executable, installer_script, "--download-node"],
+                    check=True
+                )
+                return result.returncode == 0
+            except Exception as e:
+                logger.error(f"Failed to run installer script: {e}")
+                return False
+        return False
+
+def install_cdk():
+    """Fallback function to install AWS CDK."""
+    try:
+        from aws_cdk.installer import install_cdk
+        return install_cdk()
+    except ImportError:
+        logger.error("Could not import install_cdk from aws_cdk.installer")
+        logger.info("Attempting to run the installer script directly...")
+        installer_script = os.path.join(PACKAGE_DIR, "installer.py")
+        if os.path.exists(installer_script):
+            try:
+                result = subprocess.run(
+                    [sys.executable, installer_script, "--install-cdk"],
+                    check=True
+                )
+                return result.returncode == 0
+            except Exception as e:
+                logger.error(f"Failed to run installer script: {e}")
+                return False
+        return False
+
 def main():
     """
     Main function for post-installation.
@@ -97,8 +207,9 @@ def main():
     sys.path.insert(0, os.path.dirname(package_dir))
     
     try:
-        from aws_cdk.installer import download_node, install_cdk
-        from aws_cdk import is_node_installed, is_cdk_installed, SYSTEM, MACHINE
+        # Import required modules, but use fallbacks if imports fail
+        # Import subprocess for fallback functions
+        import subprocess
         
         # Check if offline mode is requested
         offline_mode = os.environ.get("AWS_CDK_OFFLINE") == "1"

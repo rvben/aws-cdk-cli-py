@@ -464,4 +464,69 @@ def update_cdk():
         return True
     else:
         logger.error("Failed to update AWS CDK")
-        return False 
+        return False
+
+def main():
+    """Main function for installer script."""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="AWS CDK Installer")
+    parser.add_argument("--download-node", action="store_true", help="Download Node.js binaries")
+    parser.add_argument("--install-cdk", action="store_true", help="Install AWS CDK")
+    parser.add_argument("--update-cdk", action="store_true", help="Update AWS CDK to the latest version")
+    parser.add_argument("--check", action="store_true", help="Check if Node.js and AWS CDK are installed")
+    parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
+    
+    args = parser.parse_args()
+    
+    # Enable verbose logging if requested
+    if args.verbose:
+        logger.setLevel(logging.DEBUG)
+        # Enable debug logs for urllib
+        urllib_logger = logging.getLogger("urllib3")
+        urllib_logger.setLevel(logging.DEBUG)
+        
+    # Default behavior: if no arguments are provided, install both Node.js and CDK
+    if not any([args.download_node, args.install_cdk, args.update_cdk, args.check]):
+        logger.info("No arguments provided, installing both Node.js and AWS CDK...")
+        
+        if not download_node():
+            logger.error("Failed to download Node.js")
+            return 1
+        
+        if not install_cdk():
+            logger.error("Failed to install AWS CDK")
+            return 1
+        
+        logger.info("Node.js and AWS CDK installed successfully")
+        return 0
+    
+    # Execute the requested actions
+    if args.check:
+        node_installed = is_node_installed()
+        cdk_installed = is_cdk_installed()
+        
+        logger.info(f"Node.js is {'installed' if node_installed else 'not installed'}")
+        logger.info(f"AWS CDK is {'installed' if cdk_installed else 'not installed'}")
+        
+        return 0 if node_installed and cdk_installed else 1
+    
+    if args.download_node:
+        if not download_node():
+            logger.error("Failed to download Node.js")
+            return 1
+    
+    if args.install_cdk:
+        if not install_cdk():
+            logger.error("Failed to install AWS CDK")
+            return 1
+    
+    if args.update_cdk:
+        if not update_cdk():
+            logger.error("Failed to update AWS CDK")
+            return 1
+    
+    return 0
+
+if __name__ == "__main__":
+    sys.exit(main()) 
