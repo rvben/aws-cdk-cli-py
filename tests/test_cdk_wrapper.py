@@ -33,15 +33,33 @@ def setup_test_environment():
     
     # Create binary directory structure
     binary_dir = Path(aws_cdk.__file__).parent / "node_binaries" / system / machine
-    bin_dir = binary_dir / "bin"
-    bin_dir.mkdir(parents=True, exist_ok=True)
     
-    # Create mock node executable
-    node_path = bin_dir / "node"
-    if not node_path.exists():
-        with open(node_path, 'w') as f:
-            f.write('#!/bin/sh\necho "v18.16.0"\n')
-        node_path.chmod(0o755)
+    if system == "windows":
+        # Create Windows-specific structure
+        binary_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create mock node.exe file
+        node_path = binary_dir / "node.exe"
+        if not node_path.exists():
+            with open(node_path, 'w') as f:
+                f.write('@echo off\necho v18.16.0\n')
+            # Make it executable (though Windows doesn't use file permissions the same way)
+            # This is just for consistency
+            try:
+                os.chmod(node_path, 0o755)
+            except:
+                pass
+    else:
+        # Unix-based systems
+        bin_dir = binary_dir / "bin"
+        bin_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create mock node executable
+        node_path = bin_dir / "node"
+        if not node_path.exists():
+            with open(node_path, 'w') as f:
+                f.write('#!/bin/sh\necho "v18.16.0"\n')
+            node_path.chmod(0o755)
     
     # Create CDK script directory and mock script
     cdk_dir = Path(aws_cdk.__file__).parent / "node_modules" / "aws-cdk" / "bin"
@@ -50,8 +68,14 @@ def setup_test_environment():
     cdk_path = cdk_dir / "cdk"
     if not cdk_path.exists():
         with open(cdk_path, 'w') as f:
-            f.write('#!/usr/bin/env node\nconsole.log("AWS CDK v2.99.0");\n')
-        cdk_path.chmod(0o755)
+            if system == "windows":
+                f.write('@echo off\necho AWS CDK v2.99.0\n')
+            else:
+                f.write('#!/usr/bin/env node\nconsole.log("AWS CDK v2.99.0");\n')
+        try:
+            cdk_path.chmod(0o755)
+        except:
+            pass
     
     # Create node_modules metadata to prevent download attempts
     metadata_dir = Path(aws_cdk.__file__).parent / "node_modules" / "aws-cdk"
@@ -72,17 +96,25 @@ def test_node_detection():
     """Test that the package correctly detects the bundled Node.js."""
     import aws_cdk
     assert hasattr(aws_cdk, "NODE_BIN_PATH")
-    assert Path(aws_cdk.NODE_BIN_PATH).exists(), f"Node binary not found at {aws_cdk.NODE_BIN_PATH}"
     
-    # Test running node to get version
-    result = subprocess.run(
-        [aws_cdk.NODE_BIN_PATH, "--version"],
-        capture_output=True,
-        text=True
-    )
-    assert result.returncode == 0, f"Failed to run node --version: {result.stderr}"
-    assert "v" in result.stdout, f"Unexpected Node.js version output: {result.stdout}"
-    print(f"Bundled Node.js version: {result.stdout.strip()}")
+    # Verify the path exists (with better error handling)
+    node_path = Path(aws_cdk.NODE_BIN_PATH)
+    assert node_path.exists(), f"Node binary not found at {node_path} (normalized: {node_path.resolve()})"
+    
+    # On Windows, we shouldn't try to execute the mock binary directly
+    if platform.system().lower() != "windows":
+        # Test running node to get version
+        result = subprocess.run(
+            [aws_cdk.NODE_BIN_PATH, "--version"],
+            capture_output=True,
+            text=True
+        )
+        assert result.returncode == 0, f"Failed to run node --version: {result.stderr}"
+        assert "v" in result.stdout, f"Unexpected Node.js version output: {result.stdout}"
+        print(f"Bundled Node.js version: {result.stdout.strip()}")
+    else:
+        # Just report Windows path for debugging
+        print(f"Windows Node.js binary path: {node_path}")
 
 def test_cdk_paths():
     """Test that the package correctly identifies CDK paths."""
@@ -215,10 +247,16 @@ def test_platform_specific_binaries():
     binary_dir = Path(aws_cdk.__file__).parent / "node_binaries" / system / machine
     assert binary_dir.exists(), f"Node.js binary directory not found at {binary_dir}"
     
-    # Verify node executable is in this directory (or subdirectory)
-    node_binary = aws_cdk.NODE_BIN_PATH
-    assert os.path.exists(node_binary), f"Node.js binary not found at {node_binary}"
+    # Output debug info for CI
+    print(f"System: {system}")
+    print(f"Machine: {machine}")
+    print(f"Binary directory: {binary_dir}")
+    print(f"NODE_BIN_PATH: {aws_cdk.NODE_BIN_PATH}")
     
-    # Check that it's executable
+    # Verify node executable is in this directory (or subdirectory)
+    node_binary = Path(aws_cdk.NODE_BIN_PATH)
+    assert node_binary.exists(), f"Node.js binary not found at {node_binary}"
+    
+    # Check that it's executable (skip on Windows)
     if system != "windows":
-        assert os.access(node_binary, os.X_OK), f"Node.js binary is not executable" 
+        assert os.access(str(node_binary), os.X_OK), f"Node.js binary is not executable" 
