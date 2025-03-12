@@ -19,7 +19,7 @@ import datetime
 
 from aws_cdk import (
     PACKAGE_DIR, NODE_MODULES_DIR, NODE_BINARIES_DIR, NODE_PLATFORM_DIR,
-    NODE_BIN_PATH, CDK_SCRIPT_PATH, SYSTEM, MACHINE,
+    NODE_BIN_PATH, CDK_SCRIPT_PATH, SYSTEM, MACHINE as ORIG_MACHINE,
     is_cdk_installed, is_node_installed
 )
 
@@ -47,7 +47,7 @@ NODE_URLS = {
 NODE_CHECKSUMS = {
     "darwin": {
         "x86_64": "6659dab5035e3e0fba29c4f8eb1e0367b38823fe8901bd9aa633f5dbb7863148",
-        "arm64": "8a464ddec219de5602ca0e89da4db4f34c3828a83a04177e968e8499257641a3",
+        "arm64": "82c7bb4869419ce7338669e6739a786dfc7e72f276ffbed663f85ffc905dcdb4",
     },
     "linux": {
         "x86_64": "96728d3bdc1139cd15520242e6bb5599ff259617b5cdcfd124e094d7ecb51612",
@@ -134,25 +134,28 @@ def download_node():
         logger.info("Node.js is already installed")
         return True
     
+    # Use a local copy of MACHINE that we can modify if needed
+    machine = ORIG_MACHINE
+    
     try:
-        node_url = NODE_URLS[SYSTEM][MACHINE]
-        expected_checksum = NODE_CHECKSUMS.get(SYSTEM, {}).get(MACHINE)
+        node_url = NODE_URLS[SYSTEM][machine]
+        expected_checksum = NODE_CHECKSUMS.get(SYSTEM, {}).get(machine)
     except KeyError:
-        logger.error(f"Unsupported platform: {SYSTEM}-{MACHINE}")
+        logger.error(f"Unsupported platform: {SYSTEM}-{machine}")
         
         # Try to find a fallback that might work
-        if SYSTEM == "linux" and MACHINE not in NODE_URLS["linux"]:
+        if SYSTEM == "linux" and machine not in NODE_URLS["linux"]:
             logger.warning(f"Attempting fallback to x86_64 binaries for Linux")
-            MACHINE = "x86_64"
+            machine = "x86_64"
             try:
-                node_url = NODE_URLS[SYSTEM][MACHINE]
-                expected_checksum = NODE_CHECKSUMS.get(SYSTEM, {}).get(MACHINE)
+                node_url = NODE_URLS[SYSTEM][machine]
+                expected_checksum = NODE_CHECKSUMS.get(SYSTEM, {}).get(machine)
             except KeyError:
                 return False
         else:
             return False
     
-    logger.info(f"Downloading Node.js v{NODE_VERSION} for {SYSTEM}-{MACHINE}...")
+    logger.info(f"Downloading Node.js v{NODE_VERSION} for {SYSTEM}-{machine}...")
     
     # Create cache directory if it doesn't exist
     os.makedirs(CACHE_DIR, exist_ok=True)
@@ -232,6 +235,24 @@ def download_node():
                     # No top-level directory, extract directly
                     tar_ref.extractall(NODE_PLATFORM_DIR)
         
+        # Get the extracted directory name (e.g., node-v18.16.0-darwin-arm64)
+        extracted_dir_pattern = f"node-v{NODE_VERSION}-{SYSTEM}-{machine}"
+        extracted_dir = os.path.join(NODE_PLATFORM_DIR, extracted_dir_pattern)
+        
+        # Create symlinks to the bin directory for easier access
+        if SYSTEM != "windows" and os.path.exists(os.path.join(extracted_dir, "bin", "node")):
+            # Create bin directory if it doesn't exist
+            bin_dir = os.path.join(NODE_PLATFORM_DIR, "bin")
+            os.makedirs(bin_dir, exist_ok=True)
+            
+            # Create symlink to node binary
+            node_symlink = os.path.join(bin_dir, "node")
+            if not os.path.exists(node_symlink):
+                os.symlink(
+                    os.path.join(extracted_dir, "bin", "node"),
+                    node_symlink
+                )
+        
         # Make node executable on Unix-like systems
         if SYSTEM != "windows" and os.path.exists(NODE_BIN_PATH):
             os.chmod(NODE_BIN_PATH, 0o755)
@@ -240,7 +261,7 @@ def download_node():
         metadata = {
             "node_version": NODE_VERSION,
             "platform": SYSTEM,
-            "architecture": MACHINE,
+            "architecture": machine,
             "installation_date": datetime.datetime.now().isoformat(),
         }
         

@@ -86,7 +86,7 @@ else:
     NODE_BIN_PATH = os.path.join(NODE_PLATFORM_DIR, "bin", "node")
 
 # CDK script path
-CDK_SCRIPT_PATH = os.path.join(NODE_MODULES_DIR, "aws-cdk", "bin", "cdk.js")
+CDK_SCRIPT_PATH = os.path.join(NODE_MODULES_DIR, "aws-cdk", "bin", "cdk")
 
 # License paths
 LICENSES = {

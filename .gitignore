@@ -44,6 +44,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+test_env/
 
 # Node modules from AWS CDK installation
 node_modules/
@@ -59,3 +60,13 @@ package.json
 # OS specific
 .DS_Store 
 **/node_binaries
+**/bin
+
+# Local test projects
+test_cdk_project/
+
+# Cache directories
+.aws-cdk-wrapper/
+
+# Cursor specific files
+.cursorrules
