@@ -153,10 +153,10 @@ def test_cdk_init_app():
             # Change to the temporary directory
             os.chdir(tmp_dir)
             
-            # Mock the CLI run for consistent testing
-            with patch('aws_cdk.cli.run_cdk_command') as mock_run:
-                # Set proper return value for captured output
-                mock_run.return_value = (0, "Mock CDK init output", "")
+            # Mock the runtime.run_cdk function for consistent testing
+            with patch('aws_cdk.runtime.run_cdk') as mock_run:
+                # Set proper return value
+                mock_run.return_value = 0
                 
                 # Create expected files for testing
                 expected_files = ["app.py", "cdk.json", "requirements.txt"]
@@ -209,15 +209,19 @@ class HelloStack(Stack):
         super().__init__(scope, construct_id, **kwargs)
 """)
             
-            # Mock the synth command
-            with patch('aws_cdk.cli.run_cdk_command') as mock_run:
-                # Set proper return value for captured output
-                mock_run.return_value = (0, "Mock CDK synth output", "")
+            # Mock the runtime.run_cdk function
+            with patch('aws_cdk.runtime.run_cdk') as mock_run:
+                # Set proper return value
+                mock_run.return_value = 0
                 
                 # Create cdk.out directory and a template as synth would
                 os.makedirs("cdk.out", exist_ok=True)
                 with open(os.path.join("cdk.out", "HelloStack.template.json"), "w") as f:
                     f.write('{"Resources": {}}')
+                
+                # Create manifest.json to avoid the ENOENT error
+                with open(os.path.join("cdk.out", "manifest.json"), "w") as f:
+                    f.write('{"version": "test"}')
                 
                 # Run the synth command
                 import aws_cdk.cli

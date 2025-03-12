@@ -46,16 +46,17 @@ if MACHINE in ("amd64", "x86_64"):
 elif MACHINE in ("arm64", "aarch64"):
     MACHINE = "aarch64" if SYSTEM == "linux" else "arm64"
 
-# Get version from npm package if available, otherwise use a default
+# Get version from npm package if available
 try:
     npm_version = subprocess.check_output(
         ["npm", "view", CDK_PACKAGE_NAME, "version"], 
         text=True
     ).strip()
     version = npm_version
+    print(f"Using AWS CDK version {version} from npm")
 except (subprocess.SubprocessError, FileNotFoundError) as e:
     raise RuntimeError(
-        "Failed to get AWS CDK version from npm. "
+        f"Failed to get AWS CDK version from npm for package '{CDK_PACKAGE_NAME}'. "
         "Please ensure npm is installed and accessible. "
         f"Error: {str(e)}"
     )

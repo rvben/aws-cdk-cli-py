@@ -1,14 +1,14 @@
 include LICENSE
 include README.md
-include aws_cdk/node_binaries/*/*/LICENSE
-recursive-include aws_cdk/node_binaries *.md
-recursive-include aws_cdk *.py
-recursive-exclude aws_cdk/node_modules *
-recursive-exclude aws_cdk/node_binaries/*/*/bin *
-recursive-exclude aws_cdk/node_binaries/*/*/include *
-recursive-exclude aws_cdk/node_binaries/*/*/lib *
-recursive-exclude aws_cdk/node_binaries/*/*/share *
-recursive-exclude aws_cdk/node_binaries/*/*/*/bin *
-recursive-exclude aws_cdk/node_binaries/*/*/*/include *
-recursive-exclude aws_cdk/node_binaries/*/*/*/lib *
-recursive-exclude aws_cdk/node_binaries/*/*/*/share * 
+include aws_cdk_wrapper/node_binaries/*/*/LICENSE
+recursive-include aws_cdk_wrapper/node_binaries *.md
+recursive-include aws_cdk_wrapper *.py
+recursive-exclude aws_cdk_wrapper/node_modules *
+recursive-exclude aws_cdk_wrapper/node_binaries/*/*/bin *
+recursive-exclude aws_cdk_wrapper/node_binaries/*/*/include *
+recursive-exclude aws_cdk_wrapper/node_binaries/*/*/lib *
+recursive-exclude aws_cdk_wrapper/node_binaries/*/*/share *
+recursive-exclude aws_cdk_wrapper/node_binaries/*/*/*/bin *
+recursive-exclude aws_cdk_wrapper/node_binaries/*/*/*/include *
+recursive-exclude aws_cdk_wrapper/node_binaries/*/*/*/lib *
+recursive-exclude aws_cdk_wrapper/node_binaries/*/*/*/share * 
