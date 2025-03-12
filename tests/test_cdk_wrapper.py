@@ -98,15 +98,12 @@ def test_cli_basic_commands(cmd):
     """Test basic CDK CLI commands."""
     # Use patching to avoid actual downloads and ensure consistent behavior
     with patch('aws_cdk.cli.run_cdk_command') as mock_run:
-        # Set up mock return value based on command
+        # Set up mock return value based on command - always return a tuple with 3 items
         if cmd[0] == "--version":
-            mock_run.return_value = 0  # Just return success
+            mock_run.return_value = (0, "Mock CDK version output", "")
         else:
             # For help command, simulate running it with output
-            mock_proc = MagicMock()
-            mock_proc.returncode = 0
-            mock_proc.stdout = "Mock CDK help output"
-            mock_run.return_value = (0, mock_proc.stdout, "")
+            mock_run.return_value = (0, "Mock CDK help output", "")
         
         # Run the command through our CLI module by patching sys.argv
         import aws_cdk.cli
@@ -126,7 +123,8 @@ def test_cdk_init_app():
             
             # Mock the CLI run for consistent testing
             with patch('aws_cdk.cli.run_cdk_command') as mock_run:
-                mock_run.return_value = 0
+                # Set proper return value for captured output
+                mock_run.return_value = (0, "Mock CDK init output", "")
                 
                 # Create expected files for testing
                 expected_files = ["app.py", "cdk.json", "requirements.txt"]
@@ -181,7 +179,8 @@ class HelloStack(Stack):
             
             # Mock the synth command
             with patch('aws_cdk.cli.run_cdk_command') as mock_run:
-                mock_run.return_value = 0
+                # Set proper return value for captured output
+                mock_run.return_value = (0, "Mock CDK synth output", "")
                 
                 # Create cdk.out directory and a template as synth would
                 os.makedirs("cdk.out", exist_ok=True)
