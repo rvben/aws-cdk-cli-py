@@ -153,7 +153,14 @@ def download_node():
     
     # Determine the archive filename (zip for Windows, tar.gz for others)
     archive_ext = "zip" if SYSTEM == "windows" else "tar.gz"
-    archive_name = f"node-v{NODE_VERSION}-{SYSTEM}-{MACHINE}.{archive_ext}"
+    archive_name = f"node-v{NODE_VERSION}-{SYSTEM}-{MACHINE if MACHINE != 'aarch64' else 'arm64'}.{archive_ext}"
+    
+    # For linux, the architecture in the filename might be x64 instead of x86_64
+    if SYSTEM == "linux" and MACHINE == "x86_64":
+        archive_name = f"node-v{NODE_VERSION}-linux-x64.{archive_ext}"
+    elif SYSTEM == "linux" and MACHINE == "aarch64":
+        archive_name = f"node-v{NODE_VERSION}-linux-arm64.{archive_ext}"
+    
     cached_archive = os.path.join(CACHE_DIR, archive_name)
     
     def download_fresh_copy():
@@ -268,9 +275,34 @@ def download_node():
             except Exception as e:
                 logger.warning(f"Could not delete temporary file {temp_file}: {e}")
         
+        # Get node binary path from runtime helper instead of direct path
+        from aws_cdk.runtime import get_node_path
+        node_path = get_node_path()
+        
         # Verify the binary exists
-        if not os.path.exists(NODE_BIN_PATH):
-            error_msg = f"Node binary not found at expected path: {NODE_BIN_PATH}"
+        if not node_path or not os.path.exists(node_path):
+            # Check the directory structure to help diagnose the issue
+            logger.debug(f"Contents of {NODE_PLATFORM_DIR}:")
+            if os.path.exists(NODE_PLATFORM_DIR):
+                for root, dirs, files in os.walk(NODE_PLATFORM_DIR):
+                    logger.debug(f"Directory: {root}")
+                    for d in dirs:
+                        logger.debug(f"  Subdir: {d}")
+                    for f in files:
+                        logger.debug(f"  File: {f}")
+            
+            # For Unix systems, check if the binary is in the expected tarball directory structure
+            if SYSTEM != "windows":
+                # Node.js tarballs contain a directory like "node-v18.16.0-linux-x64"
+                expected_dir_name = f"node-v{NODE_VERSION}-{SYSTEM}-{'x64' if MACHINE == 'x86_64' else 'arm64'}"
+                expected_dir_path = os.path.join(NODE_PLATFORM_DIR, expected_dir_name)
+                expected_bin_path = os.path.join(expected_dir_path, "bin", "node")
+                
+                if os.path.exists(expected_bin_path):
+                    logger.info(f"Found Node.js binary at {expected_bin_path}")
+                    return True, None
+            
+            error_msg = f"Node binary not found after extraction. Checked NODE_BIN_PATH: {NODE_BIN_PATH} and runtime path: {node_path}"
             logger.error(error_msg)
             return False, error_msg
             

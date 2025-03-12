@@ -141,12 +141,13 @@ def is_cdk_installed():
 
 def is_node_installed():
     """Check if Node.js is installed in the package directory."""
+    global NODE_BIN_PATH  # Move global declaration to the beginning of the function
+    
     if not os.path.exists(NODE_BIN_PATH):
         # If the path doesn't exist, let's try to find node.exe on Windows
         if SYSTEM == "windows":
             for root, dirs, files in os.walk(NODE_PLATFORM_DIR):
                 if "node.exe" in files:
-                    global NODE_BIN_PATH
                     NODE_BIN_PATH = os.path.join(root, "node.exe")
                     break
     
