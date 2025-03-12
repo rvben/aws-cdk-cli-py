@@ -15,6 +15,7 @@ import platform
 from pathlib import Path
 import pytest
 from unittest.mock import patch
+import re
 
 # Mark all tests in this file as integration tests
 pytestmark = pytest.mark.integration
@@ -112,6 +113,7 @@ def test_cdk_version_command():
     import aws_cdk
     from aws_cdk.cli import run_cdk_command
     import os
+    import re
     
     # Run the version command
     exit_code, stdout, stderr = run_cdk_command(["--version"], capture_output=True)
@@ -122,8 +124,23 @@ def test_cdk_version_command():
     
     if exit_code == 0:
         # If the command ran successfully, check the output
-        assert "--version" in stdout or "CDK" in stdout or "Node" in stdout, \
-               f"Unexpected version output: {stdout}"
+        # The CDK version output can look like:
+        # "2.176.0 (build 899965d)" - standard format
+        
+        # Create a regex pattern to match version numbers like X.Y.Z
+        version_pattern = re.compile(r'\d+\.\d+\.\d+')
+        
+        assert (
+            "--version" in stdout or 
+            "CDK" in stdout or 
+            "version" in stdout.lower() or
+            version_pattern.search(stdout) is not None
+        ), f"Unexpected version output: {stdout}"
+        
+        # Print the detected version for reference
+        version_match = version_pattern.search(stdout)
+        if version_match:
+            print(f"Detected CDK version: {version_match.group(0)}")
     else:
         # If the command failed, it should be for a known reason
         assert "Node.js or CDK executable not found" in stderr or \
