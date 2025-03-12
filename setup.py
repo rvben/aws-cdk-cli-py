@@ -18,7 +18,7 @@ from setuptools.command.sdist import sdist
 
 # Constants
 NODE_VERSION = "18.16.0"  # LTS version
-CDK_PACKAGE_NAME = "aws-cdk-wrapper"
+CDK_PACKAGE_NAME = "aws-cdk"
 NODE_BINARIES_DIR = os.path.join("aws_cdk", "node_binaries")
 
 # Platform detection
@@ -183,7 +183,7 @@ class PostDevelopCommand(develop):
             print(f"Warning: Post-installation script not found at {post_install_script}")
 
 setup(
-    name=CDK_PACKAGE_NAME,
+    name="aws-cdk-wrapper",
     version=version,
     description="Python wrapper for AWS CDK CLI with bundled Node.js runtime",
     long_description=long_description,
