@@ -19,7 +19,7 @@ import datetime
 
 from aws_cdk import (
     PACKAGE_DIR, NODE_MODULES_DIR, NODE_BINARIES_DIR, NODE_PLATFORM_DIR,
-    NODE_BIN_PATH, CDK_SCRIPT_PATH, SYSTEM, MACHINE as ORIG_MACHINE,
+    NODE_BIN_PATH, CDK_SCRIPT_PATH, SYSTEM, MACHINE,
     is_cdk_installed, is_node_installed
 )
 
@@ -135,57 +135,30 @@ def verify_node_binary(file_path, expected_checksum):
 
 def download_node():
     """Download Node.js binaries for the current platform."""
-    if is_node_installed():
-        logger.info("Node.js is already installed")
-        return True
-    
-    # Use a local copy of MACHINE that we can modify if needed
-    machine = ORIG_MACHINE
-    
     try:
-        node_url = NODE_URLS[SYSTEM][machine]
-        expected_checksum = NODE_CHECKSUMS.get(SYSTEM, {}).get(machine)
+        node_url = NODE_URLS[SYSTEM][MACHINE]
     except KeyError:
-        logger.error(f"Unsupported platform: {SYSTEM}-{machine}")
-        
-        # Try to find a fallback that might work
-        if SYSTEM == "linux" and machine not in NODE_URLS["linux"]:
-            logger.warning(f"Attempting fallback to x86_64 binaries for Linux")
-            machine = "x86_64"
-            try:
-                node_url = NODE_URLS[SYSTEM][machine]
-                expected_checksum = NODE_CHECKSUMS.get(SYSTEM, {}).get(machine)
-            except KeyError:
-                return False
-        else:
-            return False
+        logger.error(f"Unsupported platform: {SYSTEM}-{MACHINE}")
+        return False
     
-    logger.info(f"Downloading Node.js v{NODE_VERSION} for {SYSTEM}-{machine}...")
+    logger.info(f"Downloading Node.js v{NODE_VERSION} for {SYSTEM}-{MACHINE}...")
+    
+    # Create node_binaries directory if it doesn't exist
+    os.makedirs(NODE_PLATFORM_DIR, exist_ok=True)
     
     # Create cache directory if it doesn't exist
     os.makedirs(CACHE_DIR, exist_ok=True)
     
-    # Check if we have a cached copy
-    filename = os.path.basename(node_url)
-    cached_file = os.path.join(CACHE_DIR, filename)
+    # Determine the archive filename (zip for Windows, tar.gz for others)
+    archive_ext = "zip" if SYSTEM == "windows" else "tar.gz"
+    archive_name = f"node-v{NODE_VERSION}-{SYSTEM}-{MACHINE}.{archive_ext}"
+    cached_archive = os.path.join(CACHE_DIR, archive_name)
     
-    if os.path.exists(cached_file):
-        logger.info(f"Using cached Node.js binary: {cached_file}")
-        if expected_checksum and verify_node_binary(cached_file, expected_checksum):
-            temp_file = cached_file
-        else:
-            # If verification fails or no checksum, download again
-            os.remove(cached_file)
-            temp_file = None
-    else:
-        temp_file = None
-    
-    # Download if not using cached file
-    if not temp_file:
+    def download_fresh_copy():
+        """Download a fresh copy and cache it."""
+        logger.debug("Downloading a fresh copy of Node.js")
         temp_file = tempfile.NamedTemporaryFile(delete=False).name
         try:
-            logger.info(f"Downloading from: {node_url}")
-            
             # Try to import tqdm for progress bar
             try:
                 from tqdm import tqdm
@@ -204,139 +177,88 @@ def download_node():
                     urllib.request.urlretrieve(node_url, temp_file, reporthook=report_progress)
             
             except ImportError:
-                # Fallback to simple download without progress bar but with basic status updates
-                logger.info("tqdm not available, downloading without progress bar...")
-                
-                def simple_progress(block_count, block_size, total_size):
-                    if block_count % 50 == 0:  # Report every 50 blocks
-                        downloaded_mb = block_count * block_size / (1024 * 1024)
-                        total_mb = total_size / (1024 * 1024)
-                        if total_size > 0:
-                            percent = min(100, block_count * block_size * 100 / total_size)
-                            logger.info(f"Downloaded: {downloaded_mb:.1f} MB of {total_mb:.1f} MB ({percent:.1f}%)")
-                
-                urllib.request.urlretrieve(node_url, temp_file, reporthook=simple_progress)
-                logger.info("Download completed successfully")
+                # Fallback to simple download without progress bar
+                logger.info("Progress bar not available. Downloading...")
+                with urllib.request.urlopen(node_url) as response, open(temp_file, 'wb') as out_file:
+                    shutil.copyfileobj(response, out_file)
             
-            # Verify the downloaded file
-            if expected_checksum and not verify_node_binary(temp_file, expected_checksum):
-                logger.error("Downloaded file failed checksum verification")
-                return False
-            
-            # Cache the file for future use
-            shutil.copy(temp_file, cached_file)
-            logger.info(f"Cached Node.js binary to: {cached_file}")
+            # Cache the downloaded archive for future use
+            shutil.copy(temp_file, cached_archive)
+            logger.info(f"Cached Node.js binaries to: {cached_archive}")
+            return temp_file
             
         except Exception as e:
             logger.error(f"Failed to download Node.js: {e}")
+            if os.path.exists(temp_file):
+                try:
+                    os.unlink(temp_file)
+                except Exception:
+                    pass
+            return None
+    
+    def is_valid_archive(file_path):
+        """Check if the file is a valid archive."""
+        try:
+            if file_path.endswith('.zip'):
+                with zipfile.ZipFile(file_path, 'r') as zip_ref:
+                    # Just check if it's a valid zip by listing files
+                    zip_ref.namelist()
+            else:  # .tar.gz
+                with tarfile.open(file_path, 'r:gz') as tar_ref:
+                    # Just check if it's a valid tarball by listing files
+                    tar_ref.getnames()
+            return True
+        except Exception:
+            return False
+    
+    # Check if we have a cached archive
+    use_cached = False
+    if os.path.exists(cached_archive):
+        logger.info(f"Using cached Node.js binaries: {cached_archive}")
+        # Validate cached archive before using it
+        if is_valid_archive(cached_archive):
+            temp_file = cached_archive
+            use_cached = True
+        else:
+            logger.warning(f"Cached file is invalid or corrupted, removing: {cached_archive}")
+            try:
+                os.unlink(cached_archive)
+            except Exception as e:
+                logger.warning(f"Failed to delete invalid cache file: {e}")
+            
+            # Download a fresh copy
+            temp_file = download_fresh_copy()
+            if not temp_file:
+                return False
+    else:
+        # Download a fresh copy
+        temp_file = download_fresh_copy()
+        if not temp_file:
             return False
     
     try:
-        # Create node_binaries directory if it doesn't exist
-        os.makedirs(NODE_BINARIES_DIR, exist_ok=True)
-        
         # Extract the Node.js binaries
-        os.makedirs(NODE_PLATFORM_DIR, exist_ok=True)
-        
-        if node_url.endswith('.zip'):
+        if archive_ext == 'zip':
             with zipfile.ZipFile(temp_file, 'r') as zip_ref:
-                zip_ref.extractall(NODE_PLATFORM_DIR)
+                zip_ref.extractall(NODE_PLATFORM_DIR, filter='data')
         else:  # .tar.gz
             with tarfile.open(temp_file, 'r:gz') as tar_ref:
-                # Get the top-level directory name in the tarball
-                top_level_dirs = [name for name in tar_ref.getnames() if '/' not in name and name.endswith('/')]
-                if top_level_dirs:
-                    top_dir = top_level_dirs[0]
-                    # Extract all files, but we'll need to fix the directory structure
-                    tar_ref.extractall(NODE_PLATFORM_DIR)
-                    
-                    # Move files from the top-level directory to NODE_PLATFORM_DIR
-                    extracted_dir = os.path.join(NODE_PLATFORM_DIR, top_dir.rstrip('/'))
-                    if os.path.exists(extracted_dir):
-                        for item in os.listdir(extracted_dir):
-                            source = os.path.join(extracted_dir, item)
-                            target = os.path.join(NODE_PLATFORM_DIR, item)
-                            if os.path.exists(target):
-                                if os.path.isdir(target):
-                                    shutil.rmtree(target)
-                                else:
-                                    os.remove(target)
-                            shutil.move(source, NODE_PLATFORM_DIR)
-                        
-                        # Remove the empty directory
-                        if os.path.exists(extracted_dir):
-                            shutil.rmtree(extracted_dir)
-                else:
-                    # No top-level directory, extract directly
-                    tar_ref.extractall(NODE_PLATFORM_DIR)
+                # Use 'data' filter to avoid the deprecation warning in Python 3.14+
+                tar_ref.extractall(NODE_PLATFORM_DIR, filter='data')
         
-        # Determine the actual extracted directory name
-        if SYSTEM == 'linux':
-            # Linux has different naming patterns
-            extracted_dir_pattern = f"node-v{NODE_VERSION}-linux-x64"
-        else:
-            extracted_dir_pattern = f"node-v{NODE_VERSION}-{SYSTEM}-{machine}"
+        logger.info(f"Node.js binaries extracted to {NODE_PLATFORM_DIR}")
         
-        extracted_dir = None
-        # Look for the directory that matches our pattern
-        for item in os.listdir(NODE_PLATFORM_DIR):
-            item_path = os.path.join(NODE_PLATFORM_DIR, item)
-            if os.path.isdir(item_path) and item.startswith("node-v"):
-                extracted_dir = item_path
-                break
-        
-        # Create bin directory if it doesn't exist
-        bin_dir = os.path.join(NODE_PLATFORM_DIR, "bin")
-        os.makedirs(bin_dir, exist_ok=True)
-        
-        # Create symlink to node binary or copy the executable
-        if SYSTEM != "windows" and extracted_dir and os.path.exists(os.path.join(extracted_dir, "bin", "node")):
-            # Create symlink to node binary
-            node_symlink = os.path.join(bin_dir, "node")
-            if os.path.exists(node_symlink):
-                os.remove(node_symlink)
-                
+        # If we used a temporary file (not a cached one), delete it
+        if temp_file != cached_archive and os.path.exists(temp_file):
             try:
-                # Try symlink first
-                os.symlink(
-                    os.path.join(extracted_dir, "bin", "node"),
-                    node_symlink
-                )
-            except (OSError, AttributeError):
-                # If symlink fails, copy the file
-                shutil.copy2(
-                    os.path.join(extracted_dir, "bin", "node"),
-                    node_symlink
-                )
-                # Make it executable
-                os.chmod(node_symlink, 0o755)
-            
-            logger.info(f"Created node executable at {node_symlink}")
+                os.unlink(temp_file)
+            except Exception as e:
+                logger.warning(f"Could not delete temporary file {temp_file}: {e}")
         
-        # Make node executable on Unix-like systems
-        if SYSTEM != "windows" and os.path.exists(NODE_BIN_PATH):
-            os.chmod(NODE_BIN_PATH, 0o755)
-        
-        # Create a metadata file for tracking the installed version
-        metadata = {
-            "node_version": NODE_VERSION,
-            "platform": SYSTEM,
-            "architecture": machine,
-            "installation_date": datetime.datetime.now().isoformat(),
-        }
-        
-        metadata_path = os.path.join(NODE_PLATFORM_DIR, "metadata.json")
-        with open(metadata_path, 'w') as f:
-            json.dump(metadata, f, indent=2)
-        
-        logger.info(f"Node.js binaries installed to {NODE_PLATFORM_DIR}")
         return True
     except Exception as e:
         logger.error(f"Failed to extract Node.js binaries: {e}")
         return False
-    finally:
-        if temp_file != cached_file and os.path.exists(temp_file):
-            os.unlink(temp_file)
 
 def download_cdk():
     """Download and bundle the AWS CDK code."""
@@ -360,10 +282,8 @@ def download_cdk():
     # Check if we have a cached copy
     cached_tar = os.path.join(CACHE_DIR, f"aws-cdk-{version}.tgz")
     
-    if os.path.exists(cached_tar):
-        logger.info(f"Using cached AWS CDK package: {cached_tar}")
-        tar_file = cached_tar
-    else:
+    def download_fresh_cdk_copy():
+        """Download a fresh copy of CDK and cache it."""
         # Create node_modules directory if it doesn't exist
         os.makedirs(NODE_MODULES_DIR, exist_ok=True)
         
@@ -390,6 +310,7 @@ def download_cdk():
             # Cache the file for future use
             shutil.copy(tar_file, cached_tar)
             logger.info(f"Cached AWS CDK package to: {cached_tar}")
+            return tar_file
             
         except Exception as e:
             logger.error(f"Failed to download AWS CDK using npm: {e}")
@@ -404,14 +325,49 @@ def download_cdk():
                 if response.status_code == 200:
                     with open(cached_tar, 'wb') as f:
                         f.write(response.content)
-                    tar_file = cached_tar
                     logger.info(f"Downloaded AWS CDK package directly to: {cached_tar}")
+                    return cached_tar
                 else:
                     logger.error(f"Failed to download AWS CDK: HTTP {response.status_code}")
-                    return False
+                    return None
             except Exception as e:
                 logger.error(f"Failed to download AWS CDK directly: {e}")
+                return None
+    
+    def is_valid_tarball(file_path):
+        """Check if the file is a valid tarball."""
+        try:
+            with tarfile.open(file_path, 'r:gz') as tar_ref:
+                # Just check if it's a valid tarball by listing files
+                tar_ref.getnames()
+            return True
+        except Exception:
+            return False
+    
+    # Try to use cached copy if it exists
+    use_cached = False
+    if os.path.exists(cached_tar):
+        logger.info(f"Using cached AWS CDK package: {cached_tar}")
+        # Validate cached tarball before using it
+        if is_valid_tarball(cached_tar):
+            tar_file = cached_tar
+            use_cached = True
+        else:
+            logger.warning(f"Cached CDK tarball is invalid or corrupted, removing: {cached_tar}")
+            try:
+                os.unlink(cached_tar)
+            except Exception as e:
+                logger.warning(f"Failed to delete invalid cache file: {e}")
+            
+            # Download a fresh copy
+            tar_file = download_fresh_cdk_copy()
+            if not tar_file:
                 return False
+    else:
+        # Download a fresh copy
+        tar_file = download_fresh_cdk_copy()
+        if not tar_file:
+            return False
     
     try:
         # Extract the package
@@ -425,7 +381,7 @@ def download_cdk():
             
             # Extract to a temporary directory first
             temp_dir = tempfile.mkdtemp()
-            tar_ref.extractall(temp_dir)
+            tar_ref.extractall(temp_dir, filter='data')
             
             # Now move the files to the right place
             if has_package_dir:

@@ -75,19 +75,37 @@ def download_cdk():
     os.makedirs(node_modules_dir, exist_ok=True)
     
     try:
-        # Download CDK using npm
-        subprocess.run(
-            ["npm", "pack", CDK_PACKAGE_NAME], 
-            check=True,
-            stdout=subprocess.PIPE
-        )
-        
-        # Get the name of the packed file
-        tar_file = f"{CDK_PACKAGE_NAME}-{version}.tgz"
+        # First try using npm if available
+        try:
+            # Download CDK using npm
+            subprocess.run(
+                ["npm", "pack", CDK_PACKAGE_NAME], 
+                check=True,
+                stdout=subprocess.PIPE
+            )
+            
+            # Get the name of the packed file
+            tar_file = f"{CDK_PACKAGE_NAME}-{version}.tgz"
+            
+            # Check if the file was created
+            if not os.path.exists(tar_file):
+                raise FileNotFoundError(f"npm pack did not create {tar_file}")
+                
+        except (subprocess.SubprocessError, FileNotFoundError):
+            # If npm fails, download directly from npm registry
+            print("npm not available, downloading CDK directly from npm registry...")
+            tar_file = f"{CDK_PACKAGE_NAME}-{version}.tgz"
+            registry_url = f"https://registry.npmjs.org/{CDK_PACKAGE_NAME}/-/{CDK_PACKAGE_NAME}-{version}.tgz"
+            
+            # Download the tarball
+            print(f"Downloading from {registry_url}")
+            with urllib.request.urlopen(registry_url) as response:
+                with open(tar_file, 'wb') as out_file:
+                    out_file.write(response.read())
         
         # Extract the package
         with tarfile.open(tar_file, 'r:gz') as tar_ref:
-            tar_ref.extractall(node_modules_dir)
+            tar_ref.extractall(node_modules_dir, filter='data')
         
         # Cleanup
         os.remove(tar_file)
@@ -123,6 +141,17 @@ def update_version_file(version):
             f.write(content)
         print(f"Updated version.py with version {version}")
 
+def create_readme_for_node_binaries():
+    """Create a README.txt file in the node_binaries directory."""
+    node_binaries_dir = os.path.join("aws_cdk", "node_binaries")
+    os.makedirs(node_binaries_dir, exist_ok=True)
+    
+    readme_path = os.path.join(node_binaries_dir, "README.txt")
+    with open(readme_path, "w") as f:
+        f.write("Node.js binaries will be downloaded during package installation\n")
+        f.write("for the specific platform.\n")
+        f.write("This approach reduces package size and ensures compatibility.\n")
+
 class CustomBuildPy(build_py):
     """Custom build command to download CDK during build."""
     def run(self):
@@ -132,16 +161,20 @@ class CustomBuildPy(build_py):
         # Download CDK
         download_cdk()
         
-        # Create node_binaries directory structure without the actual binaries
-        for system in NODE_URLS:
-            for machine in NODE_URLS[system]:
-                os.makedirs(os.path.join(NODE_BINARIES_DIR, system, machine), exist_ok=True)
+        # Create empty node_binaries directory structure
+        # No need to download platform-specific binaries during build
+        # They will be downloaded during post-install
+        node_binaries_dir = os.path.join("aws_cdk", "node_binaries")
+        os.makedirs(node_binaries_dir, exist_ok=True)
+        
+        # Create README.txt in node_binaries directory
+        create_readme_for_node_binaries()
                 
         build_py.run(self)
 
 # Custom sdist command to exclude node_modules from source distribution
 class CustomSdist(sdist):
-    """Custom sdist command to exclude node_modules."""
+    """Custom sdist command for source distribution."""
     def make_release_tree(self, base_dir, files):
         # Call the original method
         sdist.make_release_tree(self, base_dir, files)
@@ -151,6 +184,23 @@ class CustomSdist(sdist):
         if os.path.exists(node_modules_dir):
             print(f"Removing {node_modules_dir} from source distribution")
             shutil.rmtree(node_modules_dir)
+            # Create empty node_modules directory to maintain structure
+            os.makedirs(node_modules_dir, exist_ok=True)
+            
+        # Remove node_binaries directory from the release tree
+        node_binaries_dir = os.path.join(base_dir, "aws_cdk", "node_binaries")
+        if os.path.exists(node_binaries_dir):
+            print(f"Removing {node_binaries_dir} from source distribution")
+            shutil.rmtree(node_binaries_dir)
+            # Create empty node_binaries directory structure
+            os.makedirs(node_binaries_dir, exist_ok=True)
+            
+            # Add a README.txt to explain how the nodes are handled
+            readme_path = os.path.join(node_binaries_dir, "README.txt")
+            with open(readme_path, "w") as f:
+                f.write("Node.js binaries will be downloaded during package installation\n")
+                f.write("for the specific platform.\n")
+                f.write("This approach reduces package size and ensures compatibility.\n")
 
 # Custom install command that runs post-install script
 class PostInstallCommand(install):
@@ -198,36 +248,42 @@ setup(
     url="https://github.com/rvben/aws-cdk-wrapper",
     packages=find_packages(),
     package_data={
-        'aws_cdk': ['node_modules/**/*'],
+        'aws_cdk': [
+            'node_modules/**/*', 
+            'licenses/**/*',
+            # Include empty node_binaries directory structure
+            'node_binaries/.gitkeep',
+            'node_binaries/README.txt',
+        ],
     },
     include_package_data=True,
     entry_points={
-        "console_scripts": [
-            "cdk=aws_cdk.cli:main",
+        'console_scripts': [
+            'cdk=aws_cdk.cli:main',
         ],
     },
     install_requires=[
-        "setuptools",
-        "requests",
-        "tqdm",  # Progress bar support
-        "importlib_resources; python_version < '3.9'",
+        'setuptools',
+        'requests',  # For downloading Node.js binaries
+        'tqdm',      # For download progress bars
+        'importlib_resources; python_version < "3.9"',  # For resource management
     ],
-    python_requires=">=3.7",
+    python_requires='>=3.7',
     classifiers=[
-        "Development Status :: 3 - Alpha",
-        "Intended Audience :: Developers",
-        "License :: OSI Approved :: MIT License",
-        "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.7",
-        "Programming Language :: Python :: 3.8",
-        "Programming Language :: Python :: 3.9",
-        "Programming Language :: Python :: 3.10",
-        "Programming Language :: Python :: 3.11",
+        'Development Status :: 3 - Alpha',
+        'Intended Audience :: Developers',
+        'License :: OSI Approved :: MIT License',
+        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
     ],
     cmdclass={
         'build_py': CustomBuildPy,
+        'sdist': CustomSdist,
         'install': PostInstallCommand,
         'develop': PostDevelopCommand,
-        'sdist': CustomSdist,
     },
 ) 

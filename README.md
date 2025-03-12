@@ -1,38 +1,49 @@
 # AWS CDK Python Wrapper
 
-A Python package that provides a wrapper around the AWS CDK CLI tool, allowing Python developers to install and use AWS CDK via pip/uv instead of npm. This package includes a bundled Node.js runtime, eliminating the need for a separate npm/Node.js installation.
+A Python package that provides a wrapper around the AWS CDK CLI tool, allowing Python developers to install and use AWS CDK via pip/uv instead of npm. This package downloads and uses a platform-specific Node.js runtime during installation, eliminating the need for a separate npm/Node.js installation.
+
+## How It Works
+
+This package uses a source-only distribution approach:
+1. When installed, it downloads the appropriate Node.js binaries for your specific platform (Windows, macOS, or Linux)
+2. It bundles the AWS CDK JavaScript code but downloads platform-specific binaries on demand
+3. This approach keeps the package size small while ensuring compatibility across platforms
 
 ## Why Use This Package?
 
-If you're a Python developer working with AWS CDK, you typically need to install Node.js and npm first, then install the CDK CLI globally using npm. This wrapper eliminates that requirement by bundling a minimal Node.js runtime and the CDK CLI code directly into a Python package.
+If you're a Python developer working with AWS CDK, you typically need to install Node.js and npm first, then install the CDK CLI globally using npm. This wrapper eliminates that requirement by downloading a minimal Node.js runtime and bundling the CDK CLI code directly into a Python package.
 
 Benefits:
 - No need to install or configure Node.js/npm
 - Works in environments where npm installation is restricted
 - Keeps AWS CDK installations isolated in Python virtual environments
 - Consistent CDK versioning tied to your Python dependencies
+- Optimized package size with platform-specific binary downloads
 
 ## Installation
 
 ```bash
 # Using pip
-pip install aws-cdk
+pip install aws-cdk-wrapper
 
 # Using uv
-uv pip install aws-cdk
+uv pip install aws-cdk-wrapper
 
 # Install a specific version
-pip install aws-cdk==2.108.0
+pip install aws-cdk-wrapper==2.108.0
 ```
+
+Note: During installation, the package will download the appropriate Node.js binaries for your platform. This requires an internet connection for the initial setup.
 
 ## Features
 
 - **Zero npm dependency**: No need to install Node.js or npm on your system
-- **Platform support**: Includes Node.js binaries for Windows, macOS, and Linux
+- **Platform support**: Downloads appropriate Node.js binaries for Windows, macOS, and Linux
 - **Automatic updates**: Stays in sync with official AWS CDK releases
 - **Seamless integration**: Use the same CDK commands you're familiar with
 - **Offline caching**: Downloaded binaries are cached for offline usage
 - **License compliance**: Includes all necessary license texts
+- **Optimized size**: Only downloads the binaries needed for your platform
 
 ## Usage
 

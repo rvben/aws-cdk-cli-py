@@ -1,4 +1,4 @@
-.PHONY: test test-slow lint clean build install-dev test-local docs help
+.PHONY: test test-slow test-integration test-integration-slow test-coverage test-integration-coverage test-all-coverage lint clean build install-dev test-local docs help
 
 PYTHON := python3
 PIP := $(PYTHON) -m pip
@@ -13,8 +13,14 @@ help:
 	@echo "make install-dev    Install package in development mode"
 	@echo "make test           Run basic tests (fast tests only)"
 	@echo "make test-slow      Run all tests including slow tests"
+	@echo "make test-integration Run integration tests (requires internet)"
+	@echo "make test-integration-slow Run slow integration tests (requires internet)"
+	@echo "make test-all       Run all tests (fast, slow, and integration)"
+	@echo "make test-coverage  Run tests with coverage report"
+	@echo "make test-integration-coverage Run integration tests with coverage"
+	@echo "make test-all-coverage Run all tests including slow tests with coverage"
 	@echo "make test-local     Run local installation test script"
-	@echo "make build          Build package distribution files"
+	@echo "make build          Build package distribution files (sdist only, no wheel)"
 	@echo "make check          Check built package with twine"
 	@echo "make clean          Clean build artifacts and cache files"
 	@echo "make lint           Run code linters (flake8, black)"
@@ -34,6 +40,21 @@ test:
 test-slow:
 	$(PYTEST) tests/ -v --slow
 
+test-integration:
+	$(PYTEST) tests/integration/ -v -m integration
+
+test-integration-slow:
+	$(PYTEST) tests/integration/ -v -m "integration and slow" --slow
+
+test-coverage:
+	$(PYTEST) tests/ --cov=aws_cdk --cov-report=term --cov-report=html
+
+test-integration-coverage:
+	$(PYTEST) tests/integration/ -v -m integration --cov=aws_cdk --cov-report=term --cov-report=html
+
+test-all-coverage:
+	$(PYTEST) tests/ -v --slow --cov=aws_cdk --cov-report=term --cov-report=html
+
 test-local:
 ifeq ($(OS),Windows_NT)
 	.\testing\test_local_install.bat
@@ -41,7 +62,7 @@ else
 	./testing/test_local_install.sh
 endif
 
-test-all: test test-slow
+test-all: test test-slow test-integration
 
 # Virtual environment
 venv:
@@ -54,7 +75,7 @@ endif
 
 # Building
 build: clean
-	$(BUILD) --wheel --sdist
+	$(BUILD) --sdist
 
 check:
 	$(TWINE) check dist/*

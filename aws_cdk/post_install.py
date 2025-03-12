@@ -188,13 +188,17 @@ def download_node():
             with urllib.request.urlopen(node_url) as response, open(temp_file.name, 'wb') as out_file:
                 shutil.copyfileobj(response, out_file)
         
+        # Close the file before extracting (important for Windows)
+        temp_file.close()
+        
         # Extract the Node.js binaries
         if node_url.endswith('.zip'):
             with zipfile.ZipFile(temp_file.name, 'r') as zip_ref:
-                zip_ref.extractall(extract_dir)
+                zip_ref.extractall(extract_dir, filter='data')
         else:  # .tar.gz
             with tarfile.open(temp_file.name, 'r:gz') as tar_ref:
-                tar_ref.extractall(extract_dir)
+                # Use 'data' filter to avoid the deprecation warning in Python 3.14+
+                tar_ref.extractall(extract_dir, filter='data')
         
         logger.info(f"Node.js binaries downloaded and extracted to {extract_dir}")
         return True
@@ -202,7 +206,21 @@ def download_node():
         logger.error(f"Failed to download Node.js: {e}")
         return False
     finally:
-        os.unlink(temp_file.name)
+        # Make sure the file is closed before trying to delete it
+        if not temp_file.closed:
+            temp_file.close()
+        
+        # On Windows, the file might still be in use, so try to delete it but don't fail if we can't
+        try:
+            os.unlink(temp_file.name)
+        except Exception as e:
+            logger.warning(f"Could not delete temporary file {temp_file.name}: {e}")
+            # This is not a critical error, so we can continue
+
+    if 'AWS_CDK_DEBUG' in os.environ or 'AWS_CDK_VERBOSE' in os.environ:
+        logger.setLevel(logging.DEBUG)
+        # Make installer log more verbose as well
+        logging.getLogger('aws_cdk.installer').setLevel(logging.DEBUG)
 
 def is_cdk_installed():
     """Fallback function to check if AWS CDK is installed."""
@@ -245,75 +263,27 @@ def install_cdk():
         return False
 
 def main():
-    """
-    Main function for post-installation.
-    Sets up the environment for AWS CDK without downloading Node.js binaries.
-    Node.js will be downloaded on-demand when needed.
-    """
-    # Add the package to the Python path so we can import it
-    package_dir = os.path.dirname(os.path.abspath(__file__))
-    sys.path.insert(0, os.path.dirname(package_dir))
-    
+    """Main entry point for the post-installation script."""
     try:
-        # Import required modules, but use fallbacks if imports fail
-        # Import subprocess for fallback functions
-        import subprocess
-        
-        # Check if offline mode is requested
-        offline_mode = os.environ.get("AWS_CDK_OFFLINE") == "1"
-        if offline_mode:
-            logger.info("Running in offline mode. Using cached binaries if available.")
-        
-        # Check if we're on a supported platform
-        if SYSTEM not in ["windows", "darwin", "linux"]:
-            logger.warning(
-                f"Unsupported operating system: {SYSTEM}. "
-                "The AWS CDK wrapper may not work correctly."
-            )
-        
-        if MACHINE not in ["x86_64", "arm64", "aarch64"]:
-            logger.warning(
-                f"Unsupported architecture: {MACHINE}. "
-                "The AWS CDK wrapper may not work correctly."
-            )
-        
-        # Note: We don't download Node.js during post-install anymore
-        # It will be downloaded on-demand when needed
-        logger.info("Node.js binaries will be downloaded when CDK is first used.")
-        
-        # Install AWS CDK if not already installed
-        if not is_cdk_installed():
-            logger.info("Installing AWS CDK...")
-            
-            # Try up to 3 times to handle transient network issues
-            success = False
-            for attempt in range(3):
-                if attempt > 0:
-                    logger.info(f"Retrying AWS CDK installation (attempt {attempt+1}/3)...")
-                
-                if install_cdk():
-                    success = True
-                    break
-                
-                # Don't retry in offline mode
-                if offline_mode:
-                    break
-            
-            if not success:
-                logger.error(
-                    "Failed to install AWS CDK. "
-                    "You can try installing it manually by running: "
-                    "python -m aws_cdk.installer"
-                )
-                return 1
-        
-        # Create license notices if they don't exist
+        # Create license notices
         create_license_notices()
         
-        logger.info("AWS CDK Python wrapper successfully installed.")
+        # Always download Node.js binaries since they are not bundled with the package
+        logger.info("Downloading Node.js binaries for the current platform...")
+        if download_node():
+            logger.info("Node.js binaries downloaded successfully.")
+        else:
+            logger.warning("Failed to download Node.js binaries. CDK commands may not work.")
+            
+        # Check if CDK is installed
+        if not is_cdk_installed():
+            logger.info("Installing AWS CDK...")
+            install_cdk()
+        
+        logger.info("Post-installation completed successfully.")
         return 0
     except Exception as e:
-        logger.error(f"Error during post-installation: {e}")
+        logger.error(f"Post-installation failed: {e}")
         return 1
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aws-cdk-wrapper"
-description = "Python wrapper for AWS CDK CLI with bundled Node.js runtime"
+description = "Python wrapper for AWS CDK CLI with on-demand Node.js runtime"
 readme = "README.md"
 requires-python = ">=3.7"
 license = {text = "MIT"}
@@ -63,4 +63,5 @@ python_classes = "Test*"
 python_functions = "test_*"
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests that perform actual downloads and run real commands (run with '--integration')",
 ] 
