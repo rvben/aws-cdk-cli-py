@@ -10,6 +10,10 @@ import sys
 import logging
 import platform
 import shutil
+import urllib.request
+import tempfile
+import zipfile
+import tarfile
 from pathlib import Path
 
 # Configure logging
@@ -19,10 +23,28 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Fallback constants in case we can't import from aws_cdk
+# Constants
+NODE_VERSION = "18.16.0"  # LTS version
+NODE_BINARIES_DIR = os.path.join(os.path.dirname(__file__), "node_binaries")
+
 # Platform detection (duplicated from aws_cdk.__init__)
 SYSTEM = platform.system().lower()
 MACHINE = platform.machine().lower()
+
+# Map system and machine to Node.js download URLs
+NODE_URLS = {
+    "darwin": {
+        "x86_64": f"https://nodejs.org/dist/v{NODE_VERSION}/node-v{NODE_VERSION}-darwin-x64.tar.gz",
+        "arm64": f"https://nodejs.org/dist/v{NODE_VERSION}/node-v{NODE_VERSION}-darwin-arm64.tar.gz",
+    },
+    "linux": {
+        "x86_64": f"https://nodejs.org/dist/v{NODE_VERSION}/node-v{NODE_VERSION}-linux-x64.tar.gz",
+        "aarch64": f"https://nodejs.org/dist/v{NODE_VERSION}/node-v{NODE_VERSION}-linux-arm64.tar.gz",
+    },
+    "windows": {
+        "x86_64": f"https://nodejs.org/dist/v{NODE_VERSION}/node-v{NODE_VERSION}-win-x64.zip",
+    }
+}
 
 # Normalize machine architecture
 if MACHINE in ("amd64", "x86_64"):
@@ -112,16 +134,75 @@ def create_license_notices():
     except Exception as e:
         logger.warning(f"Failed to create license notices: {e}")
 
-# Fallback functions in case we can't import from aws_cdk.installer
 def is_node_installed():
-    """Fallback function to check if Node.js is installed."""
+    """Check if Node.js is already downloaded for the current platform."""
+    extract_dir = os.path.join(NODE_BINARIES_DIR, SYSTEM, MACHINE)
+    if not os.path.exists(extract_dir) or not os.listdir(extract_dir):
+        return False
+        
+    node_dir = next((d for d in os.listdir(extract_dir) if d.startswith("node-")), None)
+    
+    if not node_dir:
+        return False
+    
+    node_path = os.path.join(extract_dir, node_dir, "bin" if SYSTEM != "windows" else "", "node" + (".exe" if SYSTEM == "windows" else ""))
+    return os.path.exists(node_path)
+
+def download_node():
+    """Download Node.js binaries for the current platform."""
     try:
-        from aws_cdk import is_node_installed
-        return is_node_installed()
-    except ImportError:
-        # Fallback implementation
-        node_bin_path = get_node_bin_path()
-        return os.path.exists(node_bin_path)
+        node_url = NODE_URLS[SYSTEM][MACHINE]
+    except KeyError:
+        logger.error(f"Unsupported platform: {SYSTEM}-{MACHINE}")
+        return False
+    
+    logger.info(f"Downloading Node.js v{NODE_VERSION} for {SYSTEM}-{MACHINE}...")
+    
+    # Create node_binaries directory if it doesn't exist
+    extract_dir = os.path.join(NODE_BINARIES_DIR, SYSTEM, MACHINE)
+    os.makedirs(extract_dir, exist_ok=True)
+    
+    # Download the Node.js binaries with progress bar
+    temp_file = tempfile.NamedTemporaryFile(delete=False)
+    try:
+        # Try to import tqdm for progress bar
+        try:
+            from tqdm import tqdm
+            
+            # Get the file size
+            with urllib.request.urlopen(node_url) as response:
+                file_size = int(response.headers.get('Content-Length', 0))
+            
+            # Download with progress bar
+            with tqdm(total=file_size, unit='B', unit_scale=True, 
+                      desc=f"Downloading Node.js v{NODE_VERSION}") as progress_bar:
+                
+                def report_progress(block_count, block_size, total_size):
+                    progress_bar.update(block_size)
+                
+                urllib.request.urlretrieve(node_url, temp_file.name, reporthook=report_progress)
+        
+        except ImportError:
+            # Fallback to simple download without progress bar
+            logger.info("Progress bar not available. Downloading...")
+            with urllib.request.urlopen(node_url) as response, open(temp_file.name, 'wb') as out_file:
+                shutil.copyfileobj(response, out_file)
+        
+        # Extract the Node.js binaries
+        if node_url.endswith('.zip'):
+            with zipfile.ZipFile(temp_file.name, 'r') as zip_ref:
+                zip_ref.extractall(extract_dir)
+        else:  # .tar.gz
+            with tarfile.open(temp_file.name, 'r:gz') as tar_ref:
+                tar_ref.extractall(extract_dir)
+        
+        logger.info(f"Node.js binaries downloaded and extracted to {extract_dir}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to download Node.js: {e}")
+        return False
+    finally:
+        os.unlink(temp_file.name)
 
 def is_cdk_installed():
     """Fallback function to check if AWS CDK is installed."""
@@ -133,19 +214,6 @@ def is_cdk_installed():
         cdk_script_path = get_cdk_script_path()
         return os.path.exists(cdk_script_path)
 
-def get_node_bin_path():
-    """Fallback function to get Node.js binary path."""
-    try:
-        from aws_cdk import NODE_BIN_PATH
-        return NODE_BIN_PATH
-    except ImportError:
-        # Fallback implementation
-        node_binaries_dir = os.path.join(PACKAGE_DIR, "node_binaries", SYSTEM, MACHINE)
-        if SYSTEM == "windows":
-            return os.path.join(node_binaries_dir, "node.exe")
-        else:
-            return os.path.join(node_binaries_dir, "bin", "node")
-
 def get_cdk_script_path():
     """Fallback function to get CDK script path."""
     try:
@@ -154,27 +222,6 @@ def get_cdk_script_path():
     except ImportError:
         # Fallback implementation
         return os.path.join(PACKAGE_DIR, "node_modules", "aws-cdk", "bin", "cdk.js")
-
-def download_node():
-    """Fallback function to download Node.js."""
-    try:
-        from aws_cdk.installer import download_node
-        return download_node()
-    except ImportError:
-        logger.error("Could not import download_node from aws_cdk.installer")
-        logger.info("Attempting to run the installer script directly...")
-        installer_script = os.path.join(PACKAGE_DIR, "installer.py")
-        if os.path.exists(installer_script):
-            try:
-                result = subprocess.run(
-                    [sys.executable, installer_script, "--download-node"],
-                    check=True
-                )
-                return result.returncode == 0
-            except Exception as e:
-                logger.error(f"Failed to run installer script: {e}")
-                return False
-        return False
 
 def install_cdk():
     """Fallback function to install AWS CDK."""
@@ -200,7 +247,8 @@ def install_cdk():
 def main():
     """
     Main function for post-installation.
-    Extracts Node.js binaries and installs AWS CDK.
+    Sets up the environment for AWS CDK without downloading Node.js binaries.
+    Node.js will be downloaded on-demand when needed.
     """
     # Add the package to the Python path so we can import it
     package_dir = os.path.dirname(os.path.abspath(__file__))
@@ -229,30 +277,9 @@ def main():
                 "The AWS CDK wrapper may not work correctly."
             )
         
-        # Install Node.js if not already installed
-        if not is_node_installed():
-            logger.info("Installing Node.js binaries...")
-            
-            # Try up to 3 times to handle transient network issues
-            success = False
-            for attempt in range(3):
-                if attempt > 0:
-                    logger.info(f"Retrying Node.js installation (attempt {attempt+1}/3)...")
-                
-                if download_node():
-                    success = True
-                    break
-                
-                # Don't retry in offline mode
-                if offline_mode:
-                    break
-            
-            if not success:
-                logger.error(
-                    "Failed to install Node.js binaries. "
-                    "The AWS CDK wrapper may not work correctly."
-                )
-                return 1
+        # Note: We don't download Node.js during post-install anymore
+        # It will be downloaded on-demand when needed
+        logger.info("Node.js binaries will be downloaded when CDK is first used.")
         
         # Install AWS CDK if not already installed
         if not is_cdk_installed():

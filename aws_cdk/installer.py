@@ -185,8 +185,38 @@ def download_node():
         temp_file = tempfile.NamedTemporaryFile(delete=False).name
         try:
             logger.info(f"Downloading from: {node_url}")
-            with urllib.request.urlopen(node_url) as response, open(temp_file, 'wb') as out_file:
-                shutil.copyfileobj(response, out_file)
+            
+            # Try to import tqdm for progress bar
+            try:
+                from tqdm import tqdm
+                
+                # Get the file size
+                with urllib.request.urlopen(node_url) as response:
+                    file_size = int(response.headers.get('Content-Length', 0))
+                
+                # Download with progress bar
+                with tqdm(total=file_size, unit='B', unit_scale=True, 
+                          desc=f"Downloading Node.js v{NODE_VERSION}") as progress_bar:
+                    
+                    def report_progress(block_count, block_size, total_size):
+                        progress_bar.update(block_size)
+                    
+                    urllib.request.urlretrieve(node_url, temp_file, reporthook=report_progress)
+            
+            except ImportError:
+                # Fallback to simple download without progress bar but with basic status updates
+                logger.info("tqdm not available, downloading without progress bar...")
+                
+                def simple_progress(block_count, block_size, total_size):
+                    if block_count % 50 == 0:  # Report every 50 blocks
+                        downloaded_mb = block_count * block_size / (1024 * 1024)
+                        total_mb = total_size / (1024 * 1024)
+                        if total_size > 0:
+                            percent = min(100, block_count * block_size * 100 / total_size)
+                            logger.info(f"Downloaded: {downloaded_mb:.1f} MB of {total_mb:.1f} MB ({percent:.1f}%)")
+                
+                urllib.request.urlretrieve(node_url, temp_file, reporthook=simple_progress)
+                logger.info("Download completed successfully")
             
             # Verify the downloaded file
             if expected_checksum and not verify_node_binary(temp_file, expected_checksum):

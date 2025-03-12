@@ -1,10 +1,10 @@
-"""Version information for aws-cdk package.
+"""Version information for aws-cdk-wrapper package.
 
 This file is automatically updated during the build process to match
 the version of the AWS CDK CLI being bundled.
 """
 
-__version__ = "0.0.1"  # Will be updated by the build process
+__version__ = "2.1003.0-dev1"  # Placeholder that will be updated during build
 
 # Build information
 __build_date__ = None

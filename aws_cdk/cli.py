@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """
 Command-line interface for AWS CDK Python wrapper with bundled Node.js.
 """
@@ -9,6 +10,8 @@ import logging
 import argparse
 import json
 from pathlib import Path
+from . import runtime
+from . import version
 
 from aws_cdk import (
     NODE_BIN_PATH, CDK_SCRIPT_PATH, is_cdk_installed, is_node_installed,
@@ -132,92 +135,31 @@ def main():
     
     Parses arguments and passes them to the actual CDK CLI.
     """
-    # Pass all arguments directly to CDK, except for our custom ones
-    parser = argparse.ArgumentParser(add_help=False)
+    # Parse the arguments
+    parser = argparse.ArgumentParser(
+        description="AWS CDK CLI",
+        add_help=False,  # We'll pass --help to CDK CLI
+    )
     
-    # Our custom arguments
-    parser.add_argument('--install', action='store_true', 
-                        help='Force installation of AWS CDK')
-    parser.add_argument('--update', action='store_true',
-                        help='Update AWS CDK to the latest version')
-    parser.add_argument('--version', action='store_true',
-                        help='Show version information')
-    parser.add_argument('--verbose', action='store_true',
-                        help='Show detailed version and installation information')
-    parser.add_argument('--offline', action='store_true',
-                        help='Run in offline mode using cached packages')
-    parser.add_argument('--license', action='store_true',
-                        help='Show license information')
+    # Add version argument
+    parser.add_argument(
+        '--wrapper-version',
+        action='store_true',
+        help='Print the version of the Python wrapper',
+    )
     
-    # Parse only our custom arguments, leave the rest for CDK
-    args, remaining_args = parser.parse_known_args()
+    # Parse known arguments, the rest will be passed to CDK CLI
+    args, remaining = parser.parse_known_args()
     
-    # Set offline mode if requested
-    if args.offline:
-        os.environ["AWS_CDK_OFFLINE"] = "1"
-    
-    # Handle our custom commands
-    if args.install:
-        if install_cdk():
-            logger.info("AWS CDK installed successfully")
-            return 0
-        else:
-            logger.error("Failed to install AWS CDK")
-            return 1
-    
-    if args.update:
-        from aws_cdk.installer import update_cdk
-        if update_cdk():
-            logger.info("AWS CDK updated successfully")
-            return 0
-        else:
-            logger.error("Failed to update AWS CDK")
-            return 1
-    
-    if args.license:
-        # Show license information
-        aws_cdk_license = get_license_text("aws_cdk")
-        node_license = get_license_text("node")
-        
-        print("License Information:")
-        print("--------------------")
-        
-        if aws_cdk_license:
-            print("AWS CDK - Apache License 2.0:")
-            print("------------------------------")
-            print(aws_cdk_license[:1000] + "..." if len(aws_cdk_license) > 1000 else aws_cdk_license)
-            print("\n")
-        
-        if node_license:
-            print("Node.js - MIT License:")
-            print("---------------------")
-            print(node_license[:1000] + "..." if len(node_license) > 1000 else node_license)
-        
+    # Handle --wrapper-version
+    if args.wrapper_version:
+        print(f"AWS CDK Python Wrapper v{version.__version__}")
+        print(f"Bundled CDK v{version.__cdk_version__}")
+        print(f"Bundled Node.js v{version.__node_version__}")
         return 0
     
-    if args.version and not remaining_args:
-        # Show version information
-        show_versions(verbose=args.verbose)
-        return 0
-    
-    # Set verbose mode if requested
-    if args.verbose:
-        os.environ["AWS_CDK_DEBUG"] = "1"
-    
-    # Set env variables that might be needed
-    env = {}
-    
-    # For testing purposes, we need to capture and print the output
-    if 'pytest' in sys.modules:
-        returncode, stdout, stderr = run_cdk_command(remaining_args, capture_output=True, env=env)
-        if stdout:
-            print(stdout)
-        if stderr and args.verbose:
-            print(stderr, file=sys.stderr)
-        return returncode
-    else:
-        # Run the CDK command with all remaining arguments
-        return run_cdk_command(remaining_args, env=env)
+    # Run the CDK CLI with the remaining arguments
+    return runtime.run_cdk(remaining)
 
 if __name__ == "__main__":
     sys.exit(main()) 
