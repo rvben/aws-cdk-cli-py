@@ -36,8 +36,8 @@ jobs:
         id: package-version
         run: |
           # Get version from version.py if it exists
-          if [ -f "aws_cdk/version.py" ]; then
-            CURRENT_VERSION=$(grep -oP "__version__\s*=\s*['\"]([^'\"]+)" aws_cdk/version.py | cut -d'"' -f2 | cut -d"'" -f2)
+          if [ -f "aws_cdk_wrapper/version.py" ]; then
+            CURRENT_VERSION=$(grep -oP "__version__\s*=\s*['\"]([^'\"]+)" aws_cdk_wrapper/version.py | cut -d'"' -f2 | cut -d"'" -f2)
           elif [ -f "setup.py" ]; then
             # Extract version from setup.py if version.py doesn't exist
             CURRENT_VERSION=$(grep -oP "version\s*=\s*['\"]([^'\"]+)" setup.py | cut -d'"' -f2 | cut -d"'" -f2)

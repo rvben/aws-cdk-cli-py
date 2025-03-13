@@ -126,7 +126,7 @@ jobs:
               build_commit = "unknown"
           
           # Update version.py file
-          version_content = f'''"""Version information for aws-cdk package.
+          version_content = f'''"""Version information for aws-cdk-wrapper package.
 
 This file is automatically updated during the build process to match
 the version of the AWS CDK CLI being bundled.
@@ -163,7 +163,7 @@ def get_version_info():
     }}
 '''
           
-          with open('aws_cdk/version.py', 'w') as f:
+          with open('aws_cdk_wrapper/version.py', 'w') as f:
               f.write(version_content)
           
           # Update pyproject.toml
