@@ -90,7 +90,7 @@ If you're using an unsupported platform, please open an issue on our GitHub repo
 The package has the following structure:
 
 ```
-aws_cdk/
+aws_cdk_wrapper/
 ├── __init__.py           # Package initialization
 ├── cli.py                # Command-line interface implementation
 ├── installer.py          # Node.js and CDK installation logic
@@ -136,7 +136,7 @@ You can also manually test the package:
 pip install -e .
 
 # Try importing the package
-python -c "import aws_cdk; print(aws_cdk.__version__)"
+python -c "import aws_cdk_wrapper; print(aws_cdk_wrapper.__version__)"
 
 # Test the CDK CLI
 cdk --version

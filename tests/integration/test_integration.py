@@ -26,14 +26,14 @@ def clean_environment():
     Prepare a clean environment for integration tests.
     This removes any existing Node.js binaries to force a fresh download.
     """
-    import aws_cdk
+    import aws_cdk_wrapper
     
     # Save original paths
-    original_node_path = getattr(aws_cdk, "NODE_BIN_PATH", None)
-    original_cdk_path = getattr(aws_cdk, "CDK_SCRIPT_PATH", None)
+    original_node_path = getattr(aws_cdk_wrapper, "NODE_BIN_PATH", None)
+    original_cdk_path = getattr(aws_cdk_wrapper, "CDK_SCRIPT_PATH", None)
     
     # Get the node_binaries directory
-    node_binaries_dir = Path(aws_cdk.__file__).parent / "node_binaries"
+    node_binaries_dir = Path(aws_cdk_wrapper.__file__).parent / "node_binaries"
     
     # Save the original state
     had_node_binaries = node_binaries_dir.exists()
@@ -53,10 +53,10 @@ def clean_environment():
                         shutil.rmtree(machine_dir)
     
     # Clear any cached paths
-    if hasattr(aws_cdk, "_node_bin_path"):
-        delattr(aws_cdk, "_node_bin_path")
-    if hasattr(aws_cdk, "_cdk_script_path"):
-        delattr(aws_cdk, "_cdk_script_path")
+    if hasattr(aws_cdk_wrapper, "_node_bin_path"):
+        delattr(aws_cdk_wrapper, "_node_bin_path")
+    if hasattr(aws_cdk_wrapper, "_cdk_script_path"):
+        delattr(aws_cdk_wrapper, "_cdk_script_path")
     
     yield  # Run the tests
     
@@ -68,15 +68,15 @@ def clean_environment():
     
     # Restore cached paths
     if original_node_path:
-        aws_cdk.NODE_BIN_PATH = original_node_path
+        aws_cdk_wrapper.NODE_BIN_PATH = original_node_path
     if original_cdk_path:
-        aws_cdk.CDK_SCRIPT_PATH = original_cdk_path
+        aws_cdk_wrapper.CDK_SCRIPT_PATH = original_cdk_path
 
 def test_node_download():
     """Test that Node.js is downloaded automatically when needed."""
-    import aws_cdk
-    from aws_cdk.installer import download_node
-    from aws_cdk.runtime import get_node_path
+    import aws_cdk_wrapper
+    from aws_cdk_wrapper.installer import download_node
+    from aws_cdk_wrapper.runtime import get_node_path
     
     # Force a download
     success, error = download_node()
@@ -99,21 +99,21 @@ def test_node_download():
 
 def test_cdk_download():
     """Test that AWS CDK is downloaded automatically when needed."""
-    import aws_cdk
-    from aws_cdk.installer import install_cdk
+    import aws_cdk_wrapper
+    from aws_cdk_wrapper.installer import install_cdk
     
     # Force a download
     success, error = install_cdk()
     assert success, f"AWS CDK download failed: {error}"
     
     # Check that the script exists
-    assert hasattr(aws_cdk, "CDK_SCRIPT_PATH"), "CDK_SCRIPT_PATH not defined"
-    assert os.path.exists(aws_cdk.CDK_SCRIPT_PATH), f"CDK script not found at {aws_cdk.CDK_SCRIPT_PATH}"
+    assert hasattr(aws_cdk_wrapper, "CDK_SCRIPT_PATH"), "CDK_SCRIPT_PATH not defined"
+    assert os.path.exists(aws_cdk_wrapper.CDK_SCRIPT_PATH), f"CDK script not found at {aws_cdk_wrapper.CDK_SCRIPT_PATH}"
 
 def test_cdk_version_command():
     """Test running the CDK version command with the real binary."""
-    import aws_cdk
-    from aws_cdk.cli import run_cdk_command
+    import aws_cdk_wrapper
+    from aws_cdk_wrapper.cli import run_cdk_command
     import os
     import re
     
@@ -159,8 +159,8 @@ def test_cdk_version_command():
 @pytest.mark.slow
 def test_cdk_init_and_synth():
     """Test creating a new CDK app and synthesizing it with the real binary."""
-    import aws_cdk
-    from aws_cdk.cli import run_cdk_command
+    import aws_cdk_wrapper
+    from aws_cdk_wrapper.cli import run_cdk_command
     
     with tempfile.TemporaryDirectory() as tmp_dir:
         # Save the original directory

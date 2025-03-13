@@ -41,10 +41,10 @@ test-slow:
 	$(PYTEST) tests/ -v --slow
 
 test-integration:
-	$(PYTEST) tests/integration/ -v -m integration
+	$(PYTEST) tests/integration/ -v --integration
 
 test-integration-slow:
-	$(PYTEST) tests/integration/ -v -m "integration and slow" --slow
+	$(PYTEST) tests/integration/ -v --integration --slow
 
 test-coverage:
 	$(PYTEST) tests/ --cov=aws_cdk --cov-report=term --cov-report=html

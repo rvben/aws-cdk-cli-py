@@ -19,10 +19,10 @@ def setup_test_environment():
     Prepare the environment for all tests.
     This ensures binary paths exist and the test CDK is available.
     """
-    import aws_cdk
+    import aws_cdk_wrapper
     
     # Mock the download_node function to avoid actual downloads during tests
-    with patch('aws_cdk.post_install.download_node', return_value=True):
+    with patch('aws_cdk_wrapper.post_install.download_node', return_value=True):
         # Ensure Node.js binary directory exists
         system = platform.system().lower()
         machine = platform.machine().lower()
@@ -34,7 +34,7 @@ def setup_test_environment():
             machine = "aarch64" if system == "linux" else "arm64"
         
         # Create binary directory structure
-        binary_dir = Path(aws_cdk.__file__).parent / "node_binaries" / system / machine
+        binary_dir = Path(aws_cdk_wrapper.__file__).parent / "node_binaries" / system / machine
         
         if system == "windows":
             # Create Windows-specific structure
@@ -64,7 +64,7 @@ def setup_test_environment():
                 node_path.chmod(0o755)
         
         # Create CDK script directory and mock script
-        cdk_dir = Path(aws_cdk.__file__).parent / "node_modules" / "aws-cdk" / "bin"
+        cdk_dir = Path(aws_cdk_wrapper.__file__).parent / "node_modules" / "aws-cdk" / "bin"
         cdk_dir.mkdir(parents=True, exist_ok=True)
         
         cdk_path = cdk_dir / "cdk"
@@ -80,7 +80,7 @@ def setup_test_environment():
                 pass
         
         # Create node_modules metadata to prevent download attempts
-        metadata_dir = Path(aws_cdk.__file__).parent / "node_modules" / "aws-cdk"
+        metadata_dir = Path(aws_cdk_wrapper.__file__).parent / "node_modules" / "aws-cdk"
         with open(metadata_dir / "metadata.json", 'w') as f:
             f.write('{"cdk_version": "2.99.0", "installation_date": "2023-01-01T00:00:00.000Z"}')
         
@@ -90,24 +90,24 @@ def setup_test_environment():
 
 def test_import():
     """Test that the aws_cdk package can be imported."""
-    import aws_cdk
-    assert hasattr(aws_cdk, "__version__")
-    print(f"AWS CDK Python Wrapper version: {aws_cdk.__version__}")
+    import aws_cdk_wrapper
+    assert hasattr(aws_cdk_wrapper, "__version__")
+    print(f"AWS CDK Python Wrapper version: {aws_cdk_wrapper.__version__}")
 
 def test_node_detection():
     """Test that the package correctly detects the bundled Node.js."""
-    import aws_cdk
-    assert hasattr(aws_cdk, "NODE_BIN_PATH")
+    import aws_cdk_wrapper
+    assert hasattr(aws_cdk_wrapper, "NODE_BIN_PATH")
     
     # Verify the path exists (with better error handling)
-    node_path = Path(aws_cdk.NODE_BIN_PATH)
+    node_path = Path(aws_cdk_wrapper.NODE_BIN_PATH)
     assert node_path.exists(), f"Node binary not found at {node_path} (normalized: {node_path.resolve()})"
     
     # On Windows, we shouldn't try to execute the mock binary directly
     if platform.system().lower() != "windows":
         # Test running node to get version
         result = subprocess.run(
-            [aws_cdk.NODE_BIN_PATH, "--version"],
+            [aws_cdk_wrapper.NODE_BIN_PATH, "--version"],
             capture_output=True,
             text=True
         )
@@ -120,9 +120,9 @@ def test_node_detection():
 
 def test_cdk_paths():
     """Test that the package correctly identifies CDK paths."""
-    import aws_cdk
-    assert hasattr(aws_cdk, "CDK_SCRIPT_PATH")
-    assert Path(aws_cdk.CDK_SCRIPT_PATH).exists(), f"CDK script not found at {aws_cdk.CDK_SCRIPT_PATH}"
+    import aws_cdk_wrapper
+    assert hasattr(aws_cdk_wrapper, "CDK_SCRIPT_PATH")
+    assert Path(aws_cdk_wrapper.CDK_SCRIPT_PATH).exists(), f"CDK script not found at {aws_cdk_wrapper.CDK_SCRIPT_PATH}"
 
 @pytest.mark.parametrize("cmd", [
     ["--version"],
@@ -131,12 +131,12 @@ def test_cdk_paths():
 def test_cli_basic_commands(cmd):
     """Test basic CDK CLI commands."""
     # Use patching to avoid actual downloads and ensure consistent behavior
-    with patch('aws_cdk.runtime.run_cdk') as mock_run_cdk:
+    with patch('aws_cdk_wrapper.runtime.run_cdk') as mock_run_cdk:
         # Set up mock return value - just return success (0)
         mock_run_cdk.return_value = 0
         
         # Also mock run_cdk_command for backward compatibility
-        with patch('aws_cdk.cli.run_cdk_command') as mock_run:
+        with patch('aws_cdk_wrapper.cli.run_cdk_command') as mock_run:
             # Set up mock return value based on command - always return a tuple with 3 items
             if cmd[0] == "--version":
                 mock_run.return_value = (0, "Mock CDK version output", "")
@@ -145,9 +145,9 @@ def test_cli_basic_commands(cmd):
                 mock_run.return_value = (0, "Mock CDK help output", "")
             
             # Run the command through our CLI module by patching sys.argv
-            import aws_cdk.cli
+            import aws_cdk_wrapper.cli
             with patch('sys.argv', ['aws_cdk'] + cmd):
-                result = aws_cdk.cli.main()
+                result = aws_cdk_wrapper.cli.main()
                 assert result == 0, f"{cmd[0]} command failed"
 
 @pytest.mark.slow
@@ -161,12 +161,12 @@ def test_cdk_init_app():
             os.chdir(tmp_dir)
             
             # Mock the runtime.run_cdk function for consistent testing
-            with patch('aws_cdk.runtime.run_cdk') as mock_run_cdk:
+            with patch('aws_cdk_wrapper.runtime.run_cdk') as mock_run_cdk:
                 # Set proper return value
                 mock_run_cdk.return_value = 0
                 
                 # Also mock run_cdk_command for backward compatibility
-                with patch('aws_cdk.cli.run_cdk_command') as mock_run:
+                with patch('aws_cdk_wrapper.cli.run_cdk_command') as mock_run:
                     # Set proper return value for captured output
                     mock_run.return_value = (0, "Mock CDK init output", "")
                 
@@ -177,9 +177,9 @@ def test_cdk_init_app():
                             f.write(f"# Mock {file} for testing\n")
                     
                     # Run the mock init command
-                    import aws_cdk.cli
+                    import aws_cdk_wrapper.cli
                     with patch('sys.argv', ['aws_cdk', 'init', 'app', '--language=python']):
-                        result = aws_cdk.cli.main()
+                        result = aws_cdk_wrapper.cli.main()
                         assert result == 0, "Init command failed"
             
             # Check expected files
@@ -222,12 +222,12 @@ class HelloStack(Stack):
 """)
             
             # Mock the runtime.run_cdk function
-            with patch('aws_cdk.runtime.run_cdk') as mock_run_cdk:
+            with patch('aws_cdk_wrapper.runtime.run_cdk') as mock_run_cdk:
                 # Set proper return value
                 mock_run_cdk.return_value = 0
                 
                 # Also mock run_cdk_command for backward compatibility
-                with patch('aws_cdk.cli.run_cdk_command') as mock_run:
+                with patch('aws_cdk_wrapper.cli.run_cdk_command') as mock_run:
                     # Set proper return value for captured output
                     mock_run.return_value = (0, "Mock CDK synth output", "")
                 
@@ -241,9 +241,9 @@ class HelloStack(Stack):
                         f.write('{"version": "test"}')
                     
                     # Run the synth command
-                    import aws_cdk.cli
+                    import aws_cdk_wrapper.cli
                     with patch('sys.argv', ['aws_cdk', 'synth']):
-                        result = aws_cdk.cli.main()
+                        result = aws_cdk_wrapper.cli.main()
                         assert result == 0, "Synth command failed"
             
             # Check if cdk.out directory was created
@@ -254,7 +254,7 @@ class HelloStack(Stack):
 
 def test_platform_specific_binaries():
     """Test that the correct platform-specific Node.js binaries are available."""
-    import aws_cdk
+    import aws_cdk_wrapper
     system = platform.system().lower()
     machine = platform.machine().lower()
     
@@ -265,17 +265,17 @@ def test_platform_specific_binaries():
         machine = "aarch64" if system == "linux" else "arm64"
     
     # Check that binaries for current platform exist
-    binary_dir = Path(aws_cdk.__file__).parent / "node_binaries" / system / machine
+    binary_dir = Path(aws_cdk_wrapper.__file__).parent / "node_binaries" / system / machine
     assert binary_dir.exists(), f"Node.js binary directory not found at {binary_dir}"
     
     # Output debug info for CI
     print(f"System: {system}")
     print(f"Machine: {machine}")
     print(f"Binary directory: {binary_dir}")
-    print(f"NODE_BIN_PATH: {aws_cdk.NODE_BIN_PATH}")
+    print(f"NODE_BIN_PATH: {aws_cdk_wrapper.NODE_BIN_PATH}")
     
     # Verify node executable is in this directory (or subdirectory)
-    node_binary = Path(aws_cdk.NODE_BIN_PATH)
+    node_binary = Path(aws_cdk_wrapper.NODE_BIN_PATH)
     assert node_binary.exists(), f"Node.js binary not found at {node_binary}"
     
     # Check that it's executable (skip on Windows)

@@ -1,4 +1,4 @@
-"""Runtime utilities for aws-cdk package."""
+"""Runtime utilities for aws-cdk-wrapper package."""
 
 import os
 import sys
@@ -27,7 +27,7 @@ elif MACHINE in ("arm64", "aarch64"):
     MACHINE = "aarch64" if SYSTEM == "linux" else "arm64"
 
 def get_package_dir():
-    """Get the directory where the aws-cdk package is installed."""
+    """Get the directory where the aws-cdk-wrapper package is installed."""
     return os.path.dirname(os.path.abspath(__file__))
 
 def get_node_path():

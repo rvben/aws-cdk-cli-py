@@ -42,14 +42,14 @@ docs = [
 ]
 
 [project.scripts]
-cdk = "aws_cdk.cli:main"
+cdk = "aws_cdk_wrapper.cli:main"
 
 [tool.setuptools]
-packages = ["aws_cdk"]
+packages = ["aws_cdk_wrapper"]
 include-package-data = true
 
 [tool.setuptools.package-data]
-aws_cdk = ["node_binaries/**/*", "node_modules/**/*"]
+aws_cdk_wrapper = ["node_binaries/**/*", "node_modules/**/*"]
 
 [tool.black]
 line-length = 88

@@ -17,7 +17,7 @@ from pathlib import Path
 import hashlib
 import datetime
 
-from aws_cdk import (
+from aws_cdk_wrapper import (
     PACKAGE_DIR, NODE_MODULES_DIR, NODE_BINARIES_DIR, NODE_PLATFORM_DIR,
     NODE_BIN_PATH, CDK_SCRIPT_PATH, SYSTEM, MACHINE,
     is_cdk_installed, is_node_installed
@@ -276,7 +276,7 @@ def download_node():
                 logger.warning(f"Could not delete temporary file {temp_file}: {e}")
         
         # Get node binary path from runtime helper instead of direct path
-        from aws_cdk.runtime import get_node_path
+        from aws_cdk_wrapper.runtime import get_node_path
         node_path = get_node_path()
         
         # Verify the binary exists

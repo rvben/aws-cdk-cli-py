@@ -13,13 +13,13 @@ from pathlib import Path
 from . import runtime
 from . import version
 
-from aws_cdk import (
+from aws_cdk_wrapper import (
     NODE_BIN_PATH, CDK_SCRIPT_PATH, NODE_MODULES_DIR,
     is_cdk_installed, is_node_installed,
     get_cdk_version, get_node_version, get_license_text, __version__,
     SYSTEM, MACHINE
 )
-from aws_cdk.installer import install_cdk, download_node
+from aws_cdk_wrapper.installer import install_cdk, download_node
 
 # Configure logging
 logging.basicConfig(

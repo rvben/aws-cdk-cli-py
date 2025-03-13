@@ -68,9 +68,9 @@ def create_license_notices():
     This ensures license texts are available even if they weren't included in the distribution.
     """
     try:
-        # Try to import from aws_cdk first, then fall back to local definitions
+        # Try to import from aws_cdk_wrapper first, then fall back to local definitions
         try:
-            from aws_cdk import PACKAGE_DIR, LICENSES
+            from aws_cdk_wrapper import PACKAGE_DIR, LICENSES
         except ImportError:
             # Already defined above as fallback
             pass
@@ -236,7 +236,7 @@ def download_node():
 def is_cdk_installed():
     """Fallback function to check if AWS CDK is installed."""
     try:
-        from aws_cdk import is_cdk_installed
+        from aws_cdk_wrapper import is_cdk_installed
         return is_cdk_installed()
     except ImportError:
         # Fallback implementation
@@ -246,7 +246,7 @@ def is_cdk_installed():
 def get_cdk_script_path():
     """Fallback function to get CDK script path."""
     try:
-        from aws_cdk import CDK_SCRIPT_PATH
+        from aws_cdk_wrapper import CDK_SCRIPT_PATH
         return CDK_SCRIPT_PATH
     except ImportError:
         # Fallback implementation
@@ -255,10 +255,10 @@ def get_cdk_script_path():
 def install_cdk():
     """Fallback function to install AWS CDK."""
     try:
-        from aws_cdk.installer import install_cdk
+        from aws_cdk_wrapper.installer import install_cdk
         return install_cdk()
     except ImportError:
-        logger.error("Could not import install_cdk from aws_cdk.installer")
+        logger.error("Could not import install_cdk from aws_cdk_wrapper.installer")
         logger.info("Attempting to run the installer script directly...")
         installer_script = os.path.join(PACKAGE_DIR, "installer.py")
         if os.path.exists(installer_script):
