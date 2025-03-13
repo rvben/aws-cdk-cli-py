@@ -20,18 +20,30 @@ def pytest_addoption(parser):
         default=False, 
         help="Run slow tests that use real CDK commands"
     )
+    parser.addoption(
+        "--integration",
+        action="store_true",
+        default=False,
+        help="Run integration tests that perform real downloads and operations"
+    )
 
 def pytest_configure(config):
     """Configure pytest based on command line options."""
     config.addinivalue_line("markers", "slow: mark test as slow to run")
+    config.addinivalue_line("markers", "integration: mark test as integration test")
 
 def pytest_collection_modifyitems(config, items):
-    """Skip slow tests unless --slow is specified."""
-    if config.getoption("--slow"):
-        # --slow given in cli: do not skip slow tests
-        return
+    """Skip slow and integration tests unless respective flags are specified."""
+    # Handle slow tests
+    if not config.getoption("--slow"):
+        skip_slow = pytest.mark.skip(reason="Need --slow option to run")
+        for item in items:
+            if "slow" in item.keywords:
+                item.add_marker(skip_slow)
     
-    skip_slow = pytest.mark.skip(reason="Need --slow option to run")
-    for item in items:
-        if "slow" in item.keywords:
-            item.add_marker(skip_slow) 
+    # Handle integration tests
+    if not config.getoption("--integration"):
+        skip_integration = pytest.mark.skip(reason="Need --integration option to run")
+        for item in items:
+            if "integration" in item.keywords:
+                item.add_marker(skip_integration) 
