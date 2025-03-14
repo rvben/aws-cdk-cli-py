@@ -255,6 +255,13 @@ def get_cdk_script_path():
 def install_cdk():
     """Fallback function to install AWS CDK."""
     try:
+        # Get the CDK version from version.py
+        try:
+            from aws_cdk_wrapper.version import __cdk_version__ as version
+            os.environ["CDK_VERSION"] = version
+        except ImportError:
+            logger.warning("Could not get CDK version from version.py")
+        
         from aws_cdk_wrapper.installer import install_cdk
         return install_cdk()
     except ImportError:

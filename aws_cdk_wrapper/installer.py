@@ -330,8 +330,16 @@ def download_cdk():
     # Create cache directory if it doesn't exist
     os.makedirs(CACHE_DIR, exist_ok=True)
     
-    # Get latest version
-    version = get_latest_cdk_version() or "latest"
+    # Check for CDK_VERSION environment variable first
+    if "CDK_VERSION" in os.environ:
+        version = os.environ["CDK_VERSION"]
+    else:
+        # Get version from version.py
+        try:
+            from aws_cdk_wrapper.version import __cdk_version__ as version
+        except ImportError:
+            # Fallback to get latest version
+            version = get_latest_cdk_version() or "latest"
     
     # Check if we have a cached copy
     cached_tar = os.path.join(CACHE_DIR, f"aws-cdk-{version}.tgz")
@@ -345,21 +353,32 @@ def download_cdk():
             # Use npm to download CDK
             if check_npm_available():
                 # Use system npm if available
-                subprocess.run(
-                    ["npm", "pack", "aws-cdk"], 
+                result = subprocess.run(
+                    ["npm", "pack", f"aws-cdk@{version}"], 
                     check=True,
-                    stdout=subprocess.PIPE
+                    stdout=subprocess.PIPE,
+                    text=True
                 )
+                # Get the name of the packed file from the output
+                tar_file = result.stdout.strip()
+                if not tar_file:
+                    # Fallback to expected name pattern if output is empty
+                    tar_file = f"aws-cdk-{version}.tgz"
             else:
                 # Use bundled Node.js to run npm
-                subprocess.run(
-                    [NODE_BIN_PATH, "-e", "require('child_process').execSync('npm pack aws-cdk')"],
+                result = subprocess.run(
+                    [NODE_BIN_PATH, "-e", f"console.log(require('child_process').execSync('npm pack aws-cdk@{version}').toString().trim())"],
                     check=True,
-                    stdout=subprocess.PIPE
+                    stdout=subprocess.PIPE,
+                    text=True
                 )
+                # Get the name of the packed file from the output
+                tar_file = result.stdout.strip()
+                if not tar_file:
+                    # Fallback to expected name pattern if output is empty
+                    tar_file = f"aws-cdk-{version}.tgz"
             
-            # Get the name of the packed file
-            tar_file = f"aws-cdk-{version}.tgz"
+            logger.info(f"Downloaded AWS CDK package: {tar_file}")
             
             # Cache the file for future use
             shutil.copy(tar_file, cached_tar)

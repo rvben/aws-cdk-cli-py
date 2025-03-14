@@ -4,7 +4,7 @@ This file is automatically updated during the build process to match
 the version of the AWS CDK CLI being bundled.
 """
 
-__version__ = "2.1003.0-dev1"  # Placeholder that will be updated during build
+__version__ = "2.175.0"  # Placeholder that will be updated during build
 
 # Build information
 __build_date__ = None

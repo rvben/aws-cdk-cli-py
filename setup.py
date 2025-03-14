@@ -10,6 +10,7 @@ import tempfile
 import zipfile
 import tarfile
 import shutil
+import json
 from setuptools import setup, find_packages
 from setuptools.command.install import install
 from setuptools.command.develop import develop
@@ -61,7 +62,7 @@ try:
 except (subprocess.SubprocessError, FileNotFoundError) as e:
     raise RuntimeError(
         f"Failed to get AWS CDK version from npm for package '{CDK_PACKAGE_NAME}'. "
-        "Please ensure npm is installed and accessible. "
+        "Please ensure npm is installed and accessible, or set CDK_VERSION environment variable. "
         f"Error: {str(e)}"
     )
 
@@ -72,16 +73,23 @@ with open("README.md", "r", encoding="utf-8") as fh:
 def download_cdk():
     """Download and bundle the AWS CDK code."""
     node_modules_dir = os.path.join("aws_cdk_wrapper", "node_modules")
+    
+    # Clean up any existing installations
+    if os.path.exists(node_modules_dir):
+        shutil.rmtree(node_modules_dir)
+    
     os.makedirs(node_modules_dir, exist_ok=True)
     
     try:
         # First try using npm if available
         try:
-            # Download CDK using npm
-            subprocess.run(
-                ["npm", "pack", CDK_PACKAGE_NAME], 
+            # Download CDK using npm with specific version
+            result = subprocess.run(
+                ["npm", "pack", f"{CDK_PACKAGE_NAME}@{version}"], 
                 check=True,
-                stdout=subprocess.PIPE
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
             )
             
             # Get the name of the packed file
@@ -91,14 +99,13 @@ def download_cdk():
             if not os.path.exists(tar_file):
                 raise FileNotFoundError(f"npm pack did not create {tar_file}")
                 
-        except (subprocess.SubprocessError, FileNotFoundError):
+        except (subprocess.SubprocessError, FileNotFoundError) as e:
             # If npm fails, download directly from npm registry
-            print("npm not available, downloading CDK directly from npm registry...")
+            print("Falling back to direct download from npm registry...")
             tar_file = f"{CDK_PACKAGE_NAME}-{version}.tgz"
             registry_url = f"https://registry.npmjs.org/{CDK_PACKAGE_NAME}/-/{CDK_PACKAGE_NAME}-{version}.tgz"
             
             # Download the tarball
-            print(f"Downloading from {registry_url}")
             with urllib.request.urlopen(registry_url) as response:
                 with open(tar_file, 'wb') as out_file:
                     out_file.write(response.read())
@@ -113,10 +120,20 @@ def download_cdk():
         # Rename the directory
         package_dir = os.path.join(node_modules_dir, "package")
         cdk_dir = os.path.join(node_modules_dir, CDK_PACKAGE_NAME)
+        
         if os.path.exists(package_dir):
             if os.path.exists(cdk_dir):
                 shutil.rmtree(cdk_dir)
             os.rename(package_dir, cdk_dir)
+        
+        # Verify the installed version
+        package_json = os.path.join(cdk_dir, "package.json")
+        if os.path.exists(package_json):
+            with open(package_json, 'r') as f:
+                data = json.loads(f.read())
+                installed_version = data.get('version')
+                if installed_version != version:
+                    raise RuntimeError(f"Installed CDK version {installed_version} does not match requested version {version}")
         
         print(f"AWS CDK {version} downloaded and bundled")
         return True
@@ -131,12 +148,15 @@ def update_version_file(version):
         with open(version_file, "r", encoding="utf-8") as f:
             content = f.read()
         
-        # Update version
-        content = content.replace(
-            '__version__ = "0.0.0"',  # Placeholder
-            f'__version__ = "{version}"'
+        # Use regex to replace version strings
+        import re
+        # Update the __version__ variable
+        content = re.sub(
+            r'__version__ = "[^"]+"',
+            f'__version__ = "{version}"',
+            content
         )
-        
+
         with open(version_file, "w", encoding="utf-8") as f:
             f.write(content)
         print(f"Updated version.py with version {version}")
@@ -159,7 +179,8 @@ class CustomBuildPy(build_py):
         update_version_file(version)
         
         # Download CDK
-        download_cdk()
+        if not download_cdk():
+            raise RuntimeError("Failed to download AWS CDK")
         
         # Create empty node_binaries directory structure
         # No need to download platform-specific binaries during build
