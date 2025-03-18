@@ -1,1 +1,1 @@
-"""Integration tests for the AWS CDK Python wrapper.""" 
+"""Integration tests for the AWS CDK Python wrapper."""

@@ -1,6 +1,6 @@
 include LICENSE
 include README.md
-recursive-include aws_cdk *.py
-recursive-include aws_cdk/licenses *
-recursive-include aws_cdk/node_modules *
-recursive-exclude aws_cdk/node_binaries * 
+recursive-include aws_cdk_bin *.py
+recursive-include aws_cdk_bin/licenses *
+recursive-include aws_cdk_bin/node_modules *
+recursive-exclude aws_cdk_bin/node_binaries * 

@@ -76,7 +76,7 @@ jobs:
           fi
           
           # Create or update version file
-          echo "__version__ = \"$NEW_VERSION\"" > aws_cdk_wrapper/version.py
+          echo "__version__ = \"$NEW_VERSION\"" > aws_cdk_bin/version.py
           
           echo "Updated version to $NEW_VERSION"
 
