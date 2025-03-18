@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=42", "wheel"]
+requires = ["setuptools>=61.0.0", "wheel>=0.37.0", "build>=0.10.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -47,9 +47,16 @@ cdk = "aws_cdk_wrapper.cli:main"
 [tool.setuptools]
 packages = ["aws_cdk_wrapper"]
 include-package-data = true
+package-data = {"aws_cdk_wrapper" = ["node_binaries/**/*", "node_modules/**/*"]}
 
-[tool.setuptools.package-data]
-aws_cdk_wrapper = ["node_binaries/**/*", "node_modules/**/*"]
+[tool.setuptools.dynamic]
+version = {attr = "aws_cdk_wrapper.version.__version__"}
+
+[tool.setuptools.cmdclass]
+build_py = "setup.CustomBuildPy"
+install = "setup.PostInstallCommand"
+develop = "setup.PostDevelopCommand"
+sdist = "setup.CustomSdist"
 
 [tool.black]
 line-length = 88
@@ -65,3 +72,13 @@ markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests that perform actual downloads and run real commands (run with '--integration')",
 ] 
+
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+publish-url = "https://upload.pypi.org/legacy/"
+
+[[tool.uv.index]]
+name = "testpypi"
+url = "https://test.pypi.org/simple"
+publish-url = "https://test.pypi.org/legacy/"

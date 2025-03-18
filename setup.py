@@ -48,27 +48,32 @@ elif MACHINE in ("arm64", "aarch64"):
     MACHINE = "aarch64" if SYSTEM == "linux" else "arm64"
 
 # Get version from npm package if available
-try:
-    if "CDK_VERSION" in os.environ:
-        version = os.environ["CDK_VERSION"]
-        print(f"Using AWS CDK version {version} from environment variable")
-    else:
-        npm_version = subprocess.check_output(
-            ["npm", "view", CDK_PACKAGE_NAME, "version"], 
-            text=True
-        ).strip()
-        version = npm_version
-        print(f"Using AWS CDK version {version} from npm")
-except (subprocess.SubprocessError, FileNotFoundError) as e:
-    raise RuntimeError(
-        f"Failed to get AWS CDK version from npm for package '{CDK_PACKAGE_NAME}'. "
-        "Please ensure npm is installed and accessible, or set CDK_VERSION environment variable. "
-        f"Error: {str(e)}"
-    )
+def get_cdk_version():
+    """Get the CDK version from environment or npm."""
+    try:
+        if "CDK_VERSION" in os.environ:
+            version = os.environ["CDK_VERSION"]
+            print(f"Using AWS CDK version {version} from environment variable")
+            return version
+        else:
+            npm_version = subprocess.check_output(
+                ["npm", "view", CDK_PACKAGE_NAME, "version"], 
+                text=True
+            ).strip()
+            print(f"Using AWS CDK version {npm_version} from npm")
+            return npm_version
+    except (subprocess.SubprocessError, FileNotFoundError) as e:
+        raise RuntimeError(
+            f"Failed to get AWS CDK version from npm for package '{CDK_PACKAGE_NAME}'. "
+            "Please ensure npm is installed and accessible, or set CDK_VERSION environment variable. "
+            f"Error: {str(e)}"
+        )
 
 # Read the long description from README.md
-with open("README.md", "r", encoding="utf-8") as fh:
-    long_description = fh.read()
+def read_long_description():
+    """Read the long description from README.md."""
+    with open("README.md", "r", encoding="utf-8") as fh:
+        return fh.read()
 
 def download_cdk():
     """Download and bundle the AWS CDK code."""
@@ -79,6 +84,9 @@ def download_cdk():
         shutil.rmtree(node_modules_dir)
     
     os.makedirs(node_modules_dir, exist_ok=True)
+    
+    # Get the version to use
+    version = get_cdk_version()
     
     try:
         # First try using npm if available
@@ -92,9 +100,12 @@ def download_cdk():
                 text=True
             )
             
-            # Get the name of the packed file
-            tar_file = f"{CDK_PACKAGE_NAME}-{version}.tgz"
-            
+            # Get the name of the packed file from the output
+            tar_file = result.stdout.strip()
+            if not tar_file:
+                # Fall back to expected filename pattern
+                tar_file = f"{CDK_PACKAGE_NAME}-{version}.tgz"
+                
             # Check if the file was created
             if not os.path.exists(tar_file):
                 raise FileNotFoundError(f"npm pack did not create {tar_file}")
@@ -106,40 +117,75 @@ def download_cdk():
             registry_url = f"https://registry.npmjs.org/{CDK_PACKAGE_NAME}/-/{CDK_PACKAGE_NAME}-{version}.tgz"
             
             # Download the tarball
-            with urllib.request.urlopen(registry_url) as response:
+            import requests
+            with requests.get(registry_url) as response:
+                if response.status_code != 200:
+                    raise RuntimeError(f"Failed to download AWS CDK: HTTP {response.status_code}")
+                    
                 with open(tar_file, 'wb') as out_file:
-                    out_file.write(response.read())
+                    out_file.write(response.content)
         
         # Extract the package
         with tarfile.open(tar_file, 'r:gz') as tar_ref:
-            tar_ref.extractall(node_modules_dir, filter='data')
+            # Extract to a temporary directory first
+            temp_dir = tempfile.mkdtemp()
+            
+            # The filter parameter was added in Python 3.12
+            if sys.version_info >= (3, 12):
+                tar_ref.extractall(temp_dir, filter='data')
+            else:
+                # For older Python versions, just use regular extractall
+                tar_ref.extractall(temp_dir)
+            
+            # Move the files to the right place
+            package_dir = os.path.join(temp_dir, "package")
+            cdk_dir = os.path.join(node_modules_dir, CDK_PACKAGE_NAME)
+            
+            if os.path.exists(package_dir):
+                os.makedirs(cdk_dir, exist_ok=True)
+                for item in os.listdir(package_dir):
+                    src = os.path.join(package_dir, item)
+                    dst = os.path.join(cdk_dir, item)
+                    if os.path.isdir(src):
+                        shutil.copytree(src, dst)
+                    else:
+                        shutil.copy2(src, dst)
+            else:
+                # No package directory, move everything
+                os.makedirs(cdk_dir, exist_ok=True)
+                for item in os.listdir(temp_dir):
+                    src = os.path.join(temp_dir, item)
+                    dst = os.path.join(cdk_dir, item)
+                    if os.path.isdir(src):
+                        shutil.copytree(src, dst)
+                    else:
+                        shutil.copy2(src, dst)
+            
+            # Cleanup
+            shutil.rmtree(temp_dir)
         
         # Cleanup
-        os.remove(tar_file)
+        if os.path.exists(tar_file):
+            os.remove(tar_file)
         
-        # Rename the directory
-        package_dir = os.path.join(node_modules_dir, "package")
-        cdk_dir = os.path.join(node_modules_dir, CDK_PACKAGE_NAME)
+        # Create a metadata file for tracking the installed version
+        metadata = {
+            "cdk_version": version,
+            "installation_date": None,  # Will be filled at runtime
+        }
         
-        if os.path.exists(package_dir):
-            if os.path.exists(cdk_dir):
-                shutil.rmtree(cdk_dir)
-            os.rename(package_dir, cdk_dir)
+        metadata_path = os.path.join(cdk_dir, "metadata.json")
+        with open(metadata_path, 'w') as f:
+            json.dump(metadata, f, indent=2)
         
-        # Verify the installed version
-        package_json = os.path.join(cdk_dir, "package.json")
-        if os.path.exists(package_json):
-            with open(package_json, 'r') as f:
-                data = json.loads(f.read())
-                installed_version = data.get('version')
-                if installed_version != version:
-                    raise RuntimeError(f"Installed CDK version {installed_version} does not match requested version {version}")
+        # Update version.py
+        update_version_file(version)
         
         print(f"AWS CDK {version} downloaded and bundled")
         return True
     except Exception as e:
         print(f"Failed to download AWS CDK: {e}")
-        return False
+        raise
 
 def update_version_file(version):
     """Update version.py with the current version."""
@@ -154,6 +200,12 @@ def update_version_file(version):
         content = re.sub(
             r'__version__ = "[^"]+"',
             f'__version__ = "{version}"',
+            content
+        )
+        # Update the __cdk_version__ variable
+        content = re.sub(
+            r'__cdk_version__ = (?:__version__|"[^"]+")',
+            f'__cdk_version__ = "{version}"',
             content
         )
 
@@ -175,12 +227,15 @@ def create_readme_for_node_binaries():
 class CustomBuildPy(build_py):
     """Custom build command to download CDK during build."""
     def run(self):
-        # Update version.py with the current version
-        update_version_file(version)
-        
         # Download CDK
-        if not download_cdk():
-            raise RuntimeError("Failed to download AWS CDK")
+        if not os.path.exists(os.path.join("aws_cdk_wrapper", "node_modules", "aws-cdk")):
+            try:
+                download_cdk()
+            except Exception as e:
+                print(f"WARNING: Failed to download AWS CDK: {e}")
+                print("Package will be built without bundled CDK, it will be downloaded at installation time.")
+        else:
+            print("Using existing AWS CDK bundle")
         
         # Create empty node_binaries directory structure
         # No need to download platform-specific binaries during build
@@ -250,61 +305,73 @@ class PostDevelopCommand(develop):
         self.execute(self._post_install, [], msg="Running post-installation script...")
     
     def _post_install(self):
-        # Same approach as in PostInstallCommand
-        post_install_script = os.path.join(self.install_lib, "aws_cdk_wrapper", "post_install.py")
-        if os.path.exists(post_install_script):
-            os.chmod(post_install_script, 0o755)
-            subprocess.check_call([sys.executable, post_install_script])
-        else:
-            print(f"Warning: Post-installation script not found at {post_install_script}")
+        # Run the post_install script directly
+        try:
+            import aws_cdk_wrapper.post_install
+            aws_cdk_wrapper.post_install.main()
+        except ImportError as e:
+            print(f"Warning: Failed to import post_install module: {e}")
+            post_install_script = os.path.join("aws_cdk_wrapper", "post_install.py")
+            if os.path.exists(post_install_script):
+                # Make the script executable
+                os.chmod(post_install_script, 0o755)
+                # Run the script with the current Python interpreter
+                subprocess.check_call([sys.executable, post_install_script])
+            else:
+                print(f"Warning: Post-installation script not found at {post_install_script}")
 
-setup(
-    name="aws-cdk-wrapper",
-    version=version,
-    description="Python wrapper for AWS CDK CLI with bundled Node.js runtime",
-    long_description=long_description,
-    long_description_content_type="text/markdown",
-    author="Ruben J. Jongejan",
-    author_email="ruben.jongejan@gmail.com",
-    url="https://github.com/rvben/aws-cdk-wrapper",
-    packages=find_packages(),
-    package_data={
-        'aws_cdk_wrapper': [
-            'node_modules/**/*', 
-            'licenses/**/*',
-            # Include empty node_binaries directory structure
-            'node_binaries/.gitkeep',
-            'node_binaries/README.txt',
+# This setup function is used in legacy mode, but the main configuration is in pyproject.toml
+if __name__ == "__main__":
+    setup(
+        name="aws-cdk-wrapper",
+        version=get_cdk_version(),
+        description="Python wrapper for AWS CDK CLI with bundled Node.js runtime",
+        long_description=read_long_description(),
+        long_description_content_type="text/markdown",
+        author="Ruben J. Jongejan",
+        author_email="ruben.jongejan@gmail.com",
+        url="https://github.com/rvben/aws-cdk-wrapper",
+        packages=find_packages(),
+        package_data={
+            'aws_cdk_wrapper': [
+                'node_modules/**/*', 
+                'licenses/**/*',
+                # Include empty node_binaries directory structure
+                'node_binaries/.gitkeep',
+                'node_binaries/README.txt',
+            ],
+        },
+        include_package_data=True,
+        entry_points={
+            'console_scripts': [
+                'cdk=aws_cdk_wrapper.cli:main',
+            ],
+        },
+        install_requires=[
+            'setuptools',
+            'requests',  # For downloading Node.js binaries
+            'tqdm',      # For download progress bars
+            'importlib_resources; python_version < "3.9"',  # For resource management
         ],
-    },
-    include_package_data=True,
-    entry_points={
-        'console_scripts': [
-            'cdk=aws_cdk_wrapper.cli:main',
+        python_requires='>=3.7',
+        classifiers=[
+            'Development Status :: 3 - Alpha',
+            'Intended Audience :: Developers',
+            'License :: OSI Approved :: MIT License',
+            'Programming Language :: Python :: 3',
+            'Programming Language :: Python :: 3.7',
+            'Programming Language :: Python :: 3.8',
+            'Programming Language :: Python :: 3.9',
+            'Programming Language :: Python :: 3.10',
+            'Programming Language :: Python :: 3.11',
         ],
-    },
-    install_requires=[
-        'setuptools',
-        'requests',  # For downloading Node.js binaries
-        'tqdm',      # For download progress bars
-        'importlib_resources; python_version < "3.9"',  # For resource management
-    ],
-    python_requires='>=3.7',
-    classifiers=[
-        'Development Status :: 3 - Alpha',
-        'Intended Audience :: Developers',
-        'License :: OSI Approved :: MIT License',
-        'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.7',
-        'Programming Language :: Python :: 3.8',
-        'Programming Language :: Python :: 3.9',
-        'Programming Language :: Python :: 3.10',
-        'Programming Language :: Python :: 3.11',
-    ],
-    cmdclass={
-        'build_py': CustomBuildPy,
-        'sdist': CustomSdist,
-        'install': PostInstallCommand,
-        'develop': PostDevelopCommand,
-    },
-) 
+        cmdclass={
+            'build_py': CustomBuildPy,
+            'install': PostInstallCommand,
+            'develop': PostDevelopCommand,
+            'sdist': CustomSdist,
+        },
+    )
+else:
+    # When imported (rather than executed), expose the custom classes for pyproject.toml
+    __all__ = ['CustomBuildPy', 'PostInstallCommand', 'PostDevelopCommand', 'CustomSdist'] 
