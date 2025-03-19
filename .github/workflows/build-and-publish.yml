@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'  # Trigger on any tag starting with v
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'CDK Version to build and publish'
+        required: true
+        default: ''
 
 jobs:
   test:
@@ -28,10 +34,19 @@ jobs:
         with:
           node-version: '18'
           
-      - name: Get tag version
+      - name: Get version from tag or input
         id: get_version
         shell: bash
-        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            # Triggered by tag push
+            VERSION=${GITHUB_REF#refs/tags/v}
+          else
+            # Triggered manually
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Building for version: ${VERSION}"
       
       - name: Install uv
         shell: bash
@@ -78,9 +93,18 @@ jobs:
         with:
           node-version: '18'
           
-      - name: Get tag version
+      - name: Get version from tag or input
         id: get_version
-        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            # Triggered by tag push
+            VERSION=${GITHUB_REF#refs/tags/v}
+          else
+            # Triggered manually
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Building for version: ${VERSION}"
       
       - name: Install build dependencies
         run: |
@@ -111,5 +135,6 @@ jobs:
         env:
           TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
           TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+          CDK_VERSION: ${{ steps.get_version.outputs.version }}
         run: |
           make publish-prod 
