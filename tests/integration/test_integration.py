@@ -132,21 +132,6 @@ def test_node_download(clean_environment):
     print(f"Node.js version (from test fixture): {result.stdout.strip()}")
 
 
-def test_cdk_download():
-    """Test that AWS CDK is downloaded automatically when needed."""
-    from aws_cdk_cli.installer import install_cdk
-
-    # Force a download
-    success, error = install_cdk()
-    assert success, f"AWS CDK download failed: {error}"
-
-    # Check that the script exists
-    assert hasattr(aws_cdk_cli, "CDK_SCRIPT_PATH"), "CDK_SCRIPT_PATH not defined"
-    assert os.path.exists(aws_cdk_cli.CDK_SCRIPT_PATH), (
-        f"CDK script not found at {aws_cdk_cli.CDK_SCRIPT_PATH}"
-    )
-
-
 def test_cdk_version_command():
     """Test running the CDK version command with the real binary."""
     import subprocess

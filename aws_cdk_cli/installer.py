@@ -15,6 +15,7 @@ import hashlib
 import re
 import urllib.request
 import urllib.error
+import datetime
 
 # Import our custom modules instead of external dependencies
 from . import semver_helper as semver
@@ -658,90 +659,6 @@ def setup_nodejs():
         return False, result
 
 
-def install_cdk():
-    """Install AWS CDK npm package."""
-    if is_cdk_installed():
-        logger.info("AWS CDK is already installed")
-        return True, None
-
-    # First, ensure Node.js is available
-    node_success, node_result = setup_nodejs()
-    if not node_success:
-        return False, f"Node.js setup failed: {node_result}"
-
-    # Then, download and install CDK
-    success, error = download_cdk()
-    if not success:
-        error_msg = f"Failed to download AWS CDK. Error: {error}"
-        logger.error(error_msg)
-        return False, error_msg
-
-    logger.info("AWS CDK installed successfully")
-    return True, None
-
-
-def update_cdk():
-    """Update AWS CDK to the latest version."""
-    logger.info("Updating AWS CDK...")
-
-    # Get the latest version
-    latest_version = get_latest_cdk_version()
-    if not latest_version:
-        error_msg = "Failed to determine latest AWS CDK version"
-        logger.error(error_msg)
-        return False, error_msg
-
-    # Check current version if installed
-    if is_cdk_installed():
-        try:
-            metadata_path = os.path.join(NODE_MODULES_DIR, "aws-cdk", "metadata.json")
-            if os.path.exists(metadata_path):
-                with open(metadata_path, "r") as f:
-                    metadata = json.load(f)
-                    current_version = metadata.get("cdk_version")
-
-                    if current_version == latest_version:
-                        logger.info(
-                            f"AWS CDK is already at latest version {latest_version}"
-                        )
-                        return True, None
-
-                    logger.info(
-                        f"Updating AWS CDK from {current_version} to {latest_version}"
-                    )
-        except Exception as e:
-            logger.warning(f"Failed to check current CDK version: {e}")
-
-    # First, ensure Node.js is installed
-    if not is_node_installed():
-        success, error = download_node()
-        if not success:
-            error_msg = f"Failed to download Node.js. Cannot update CDK. Error: {error}"
-            logger.error(error_msg)
-            return False, error_msg
-
-    # Remove existing CDK installation
-    cdk_dir = os.path.join(NODE_MODULES_DIR, "aws-cdk")
-    if os.path.exists(cdk_dir):
-        try:
-            shutil.rmtree(cdk_dir)
-            logger.info("Removed existing AWS CDK installation")
-        except Exception as e:
-            error_msg = f"Failed to remove existing AWS CDK installation: {e}"
-            logger.error(error_msg)
-            return False, error_msg
-
-    # Download and install CDK
-    success, error = download_cdk()
-    if not success:
-        error_msg = f"Failed to download AWS CDK. Error: {error}"
-        logger.error(error_msg)
-        return False, error_msg
-
-    logger.info(f"AWS CDK updated to version {latest_version}")
-    return True, None
-
-
 def find_system_bun():
     """
     Find the Bun executable on the system PATH and return its path.
@@ -864,10 +781,6 @@ def main():
     parser.add_argument(
         "--download-node", action="store_true", help="Download Node.js binaries"
     )
-    parser.add_argument("--install-cdk", action="store_true", help="Install AWS CDK")
-    parser.add_argument(
-        "--update-cdk", action="store_true", help="Update AWS CDK to the latest version"
-    )
     parser.add_argument(
         "--check",
         action="store_true",
@@ -884,19 +797,16 @@ def main():
         urllib_logger = logging.getLogger("urllib3")
         urllib_logger.setLevel(logging.DEBUG)
 
-    # Default behavior: if no arguments are provided, install both Node.js and CDK
-    if not any([args.download_node, args.install_cdk, args.update_cdk, args.check]):
-        logger.info("No arguments provided, installing both Node.js and AWS CDK...")
+    # Default behavior: if no arguments are provided, download Node.js only
+    if not any([args.download_node, args.check]):
+        logger.info("No arguments provided, downloading Node.js...")
 
-        if not download_node():
-            logger.error("Failed to download Node.js")
+        success, error = download_node()
+        if not success:
+            logger.error(f"Failed to download Node.js: {error}")
             return 1
 
-        if not install_cdk():
-            logger.error("Failed to install AWS CDK")
-            return 1
-
-        logger.info("Node.js and AWS CDK installed successfully")
+        logger.info("Node.js installed successfully")
         return 0
 
     # Execute the requested actions
@@ -910,19 +820,12 @@ def main():
         return 0 if node_installed and cdk_installed else 1
 
     if args.download_node:
-        if not download_node():
-            logger.error("Failed to download Node.js")
+        success, error = download_node()
+        if not success:
+            logger.error(f"Failed to download Node.js: {error}")
             return 1
-
-    if args.install_cdk:
-        if not install_cdk():
-            logger.error("Failed to install AWS CDK")
-            return 1
-
-    if args.update_cdk:
-        if not update_cdk():
-            logger.error("Failed to update AWS CDK")
-            return 1
+        
+        logger.info("Node.js downloaded successfully")
 
     return 0
 

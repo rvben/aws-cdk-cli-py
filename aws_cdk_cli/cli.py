@@ -23,7 +23,7 @@ from aws_cdk_cli import (
     SYSTEM,
     MACHINE,
 )
-from aws_cdk_cli.installer import install_cdk, setup_nodejs
+from aws_cdk_cli.installer import setup_nodejs
 
 # Configure logging
 logging.basicConfig(level=logging.WARNING, format="%(levelname)s: %(message)s")
@@ -55,15 +55,6 @@ def run_cdk_command(args, capture_output=False, env=None):
                 return 1, "", error_msg
             return 1
 
-    if not is_cdk_installed():
-        logger.info("AWS CDK is not installed. Installing...")
-        success, error = install_cdk()
-        if not success:
-            error_msg = f"Failed to install AWS CDK. Error: {error}"
-            logger.error(error_msg)
-            if capture_output:
-                return 1, "", error_msg
-            return 1
 
     # Construct the command: node cdk.js [args]
     # The correct way to execute the CDK CLI is to run the script through Node.js
