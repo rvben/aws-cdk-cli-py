@@ -6,6 +6,7 @@ Pytest test file for Node.js runtime detection and compatibility.
 import pytest
 from unittest.mock import patch
 import os
+import platform
 
 from aws_cdk_cli.installer import (
     find_system_nodejs,
@@ -139,7 +140,14 @@ def test_setup_nodejs_with_system_node(system_node_env):
 @patch("aws_cdk_cli.installer.download_node")
 def test_setup_nodejs_with_force_download(mock_download, force_download_env):
     """Test forcing Node.js download."""
-    mock_download.return_value = (True, "/mock/path/to/node")
+    # Set up a proper return value based on platform
+    system = platform.system().lower()
+    if system == "windows":
+        mock_path = "\\mock\\path\\to\\node.exe"
+    else:
+        mock_path = "/mock/path/to/node"
+        
+    mock_download.return_value = (True, mock_path)
 
     success, result = setup_nodejs()
 
@@ -148,9 +156,12 @@ def test_setup_nodejs_with_force_download(mock_download, force_download_env):
     assert success
     assert result  # Just verify that we got a valid path
 
-    # If the mock was called, verify it returned the expected value
+    # If the mock was called, verify the path is appropriate for the platform
     if mock_download.called:
-        assert "/node" in result  # Just check that the result contains 'node'
+        if system == "windows":
+            assert ".exe" in result.lower(), f"Windows node binary path should end with .exe, got: {result}"
+        else:
+            assert "/node" in result, f"Unix node binary path should contain '/node', got: {result}"
 
 
 @pytest.mark.integration
