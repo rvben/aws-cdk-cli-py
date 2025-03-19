@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from aws_cdk_bin.installer import (
+from aws_cdk_cli.installer import (
     find_system_bun,
     get_bun_version,
     get_bun_reported_nodejs_version,

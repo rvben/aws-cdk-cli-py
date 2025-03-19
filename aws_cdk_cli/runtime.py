@@ -116,9 +116,9 @@ def ensure_node_installed():
     Ensure JavaScript runtime (Node.js or Bun) is installed and available.
     
     Respects environment variables:
-    - AWS_CDK_BIN_USE_SYSTEM_NODE: If set, prefer using system Node.js
-    - AWS_CDK_BIN_USE_BUN: If set, try to use Bun as the JavaScript runtime
-    - AWS_CDK_BIN_FORCE_DOWNLOAD_NODE: If set, force downloading Node.js
+    - AWS_CDK_CLI_USE_SYSTEM_NODE: If set, prefer using system Node.js
+    - AWS_CDK_CLI_USE_BUN: If set, try to use Bun as the JavaScript runtime
+    - AWS_CDK_CLI_FORCE_DOWNLOAD_NODE: If set, force downloading Node.js
     
     Default behavior is to use system Node.js if available and compatible, then fall back to bundled Node.js.
     """
@@ -157,7 +157,7 @@ def run_cdk(args):
     env = os.environ.copy()
     
     # Check if warnings should be shown (explicit env var or CLI flag)
-    show_warnings = os.environ.get("AWS_CDK_BIN_SHOW_NODE_WARNINGS") == "1"
+    show_warnings = os.environ.get("AWS_CDK_CLI_SHOW_NODE_WARNINGS") == "1"
     
     # By default, silence Node.js version warnings unless explicitly requested
     if not show_warnings and "JSII_SILENCE_WARNING_UNTESTED_NODE_VERSION" not in env:

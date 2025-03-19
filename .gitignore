@@ -66,8 +66,8 @@ package.json
 test_cdk_project/
 
 # Cache directories
-.aws-cdk-bin/
+.aws-cdk-cli/
 
 # Cursor specific files
 .cursorrules
-aws_cdk_bin/version.py
+aws_cdk_cli/version.py

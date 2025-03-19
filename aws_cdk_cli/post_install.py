@@ -65,9 +65,9 @@ def create_license_notices():
     This ensures license texts are available even if they weren't included in the distribution.
     """
     try:
-        # Try to import from aws_cdk_bin first, then fall back to local definitions
+        # Try to import from aws_cdk_cli first, then fall back to local definitions
         try:
-            from aws_cdk_bin import PACKAGE_DIR, LICENSES
+            from aws_cdk_cli import PACKAGE_DIR, LICENSES
         except ImportError:
             # Already defined above as fallback
             pass
@@ -253,7 +253,7 @@ def download_node():
 def is_cdk_installed():
     """Fallback function to check if AWS CDK is installed."""
     try:
-        from aws_cdk_bin import is_cdk_installed
+        from aws_cdk_cli import is_cdk_installed
 
         return is_cdk_installed()
     except ImportError:
@@ -265,7 +265,7 @@ def is_cdk_installed():
 def get_cdk_script_path():
     """Fallback function to get CDK script path."""
     try:
-        from aws_cdk_bin import CDK_SCRIPT_PATH
+        from aws_cdk_cli import CDK_SCRIPT_PATH
 
         return CDK_SCRIPT_PATH
     except ImportError:

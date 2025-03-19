@@ -17,7 +17,7 @@ import datetime
 import re
 import semver
 
-from aws_cdk_bin import (
+from aws_cdk_cli import (
     NODE_MODULES_DIR,
     NODE_PLATFORM_DIR,
     NODE_BIN_PATH,
@@ -307,7 +307,7 @@ def download_node():
                 logger.warning(f"Could not delete temporary file {temp_file}: {e}")
 
         # Get node binary path from runtime helper instead of direct path
-        from aws_cdk_bin.runtime import get_node_path
+        from aws_cdk_cli.runtime import get_node_path
 
         node_path = get_node_path()
 
@@ -574,17 +574,17 @@ def setup_nodejs():
     Set up JavaScript runtime for AWS CDK (Node.js or Bun).
     
     Environment variables that control behavior:
-    - AWS_CDK_BIN_USE_SYSTEM_NODE: If set, prefer using system Node.js over bundled
-    - AWS_CDK_BIN_USE_BUN: If set, try to use Bun as the JavaScript runtime
-    - AWS_CDK_BIN_FORCE_DOWNLOAD_NODE: If set, always download Node.js regardless of existing installation
+    - AWS_CDK_CLI_USE_SYSTEM_NODE: If set, prefer using system Node.js over bundled
+    - AWS_CDK_CLI_USE_BUN: If set, try to use Bun as the JavaScript runtime
+    - AWS_CDK_CLI_FORCE_DOWNLOAD_NODE: If set, always download Node.js regardless of existing installation
     
     Returns:
         tuple: (success, path_to_js_runtime_executable or error_message)
     """
     # Check environment variables
-    force_system_node = os.environ.get("AWS_CDK_BIN_USE_SYSTEM_NODE") == "1"
-    use_bun = os.environ.get("AWS_CDK_BIN_USE_BUN") == "1"
-    force_download = os.environ.get("AWS_CDK_BIN_FORCE_DOWNLOAD_NODE") == "1"
+    force_system_node = os.environ.get("AWS_CDK_CLI_USE_SYSTEM_NODE") == "1"
+    use_bun = os.environ.get("AWS_CDK_CLI_USE_BUN") == "1"
+    force_download = os.environ.get("AWS_CDK_CLI_FORCE_DOWNLOAD_NODE") == "1"
     
     logger.debug(f"Setup JS runtime - force_system_node: {force_system_node}, use_bun: {use_bun}, force_download: {force_download}")
     
@@ -594,8 +594,8 @@ def setup_nodejs():
     
     # If we're forcing multiple options, establish precedence
     if force_system_node and force_download:
-        logger.warning("Both AWS_CDK_BIN_USE_SYSTEM_NODE and AWS_CDK_BIN_FORCE_DOWNLOAD_NODE are set.")
-        logger.warning("AWS_CDK_BIN_USE_SYSTEM_NODE takes precedence.")
+        logger.warning("Both AWS_CDK_CLI_USE_SYSTEM_NODE and AWS_CDK_CLI_FORCE_DOWNLOAD_NODE are set.")
+        logger.warning("AWS_CDK_CLI_USE_SYSTEM_NODE takes precedence.")
         force_download = False
     
     # If we're forcing download, do that first and exit
@@ -657,7 +657,7 @@ def setup_nodejs():
                     logger.info(f"Compatible with AWS CDK requirements: {node_req}")
                 else:
                     logger.warning(f"System Node.js v{node_version} may not be compatible with AWS CDK requirements: {node_req}")
-                    logger.warning("Using anyway because AWS_CDK_BIN_USE_SYSTEM_NODE is set")
+                    logger.warning("Using anyway because AWS_CDK_CLI_USE_SYSTEM_NODE is set")
                 return True, system_node
             else:
                 logger.info(f"System Node.js v{node_version} is not compatible with AWS CDK requirements: {node_req}")

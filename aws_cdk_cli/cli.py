@@ -11,7 +11,7 @@ import argparse
 from . import runtime
 from . import version
 
-from aws_cdk_bin import (
+from aws_cdk_cli import (
     __version__,
     get_license_text,
     is_cdk_installed,
@@ -23,7 +23,7 @@ from aws_cdk_bin import (
     SYSTEM,
     MACHINE,
 )
-from aws_cdk_bin.installer import install_cdk, setup_nodejs
+from aws_cdk_cli.installer import install_cdk, setup_nodejs
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -209,7 +209,7 @@ def main():
     if args.verbose:
         logging.root.setLevel(logging.DEBUG)
         logging.getLogger("aws-cdk-runtime").setLevel(logging.DEBUG)
-        logging.getLogger("aws_cdk_bin").setLevel(logging.DEBUG)
+        logging.getLogger("aws_cdk_cli").setLevel(logging.DEBUG)
 
     # Handle --wrapper-version
     if args.wrapper_version:
@@ -221,19 +221,19 @@ def main():
     # If runtime control options are provided, set them as environment vars
     # so they can be passed to the installer/runtime modules
     if args.use_system_node:
-        os.environ["AWS_CDK_BIN_USE_SYSTEM_NODE"] = "1"
+        os.environ["AWS_CDK_CLI_USE_SYSTEM_NODE"] = "1"
         logger.debug("Using system Node.js if available")
     
     if args.use_bun:
-        os.environ["AWS_CDK_BIN_USE_BUN"] = "1"
+        os.environ["AWS_CDK_CLI_USE_BUN"] = "1"
         logger.debug("Using Bun as JavaScript runtime if available")
     
     if args.force_download_node:
-        os.environ["AWS_CDK_BIN_FORCE_DOWNLOAD_NODE"] = "1"
+        os.environ["AWS_CDK_CLI_FORCE_DOWNLOAD_NODE"] = "1"
         logger.debug("Forcing download of bundled Node.js")
     
     if args.show_node_warnings:
-        os.environ["AWS_CDK_BIN_SHOW_NODE_WARNINGS"] = "1"
+        os.environ["AWS_CDK_CLI_SHOW_NODE_WARNINGS"] = "1"
         logger.debug("Showing Node.js version compatibility warnings")
         
     # Check for incompatible combinations

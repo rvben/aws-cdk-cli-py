@@ -7,6 +7,7 @@ import platform
 import subprocess
 import shutil
 import json
+import re
 from setuptools import setup, find_packages
 from setuptools.command.install import install
 from setuptools.command.develop import develop
@@ -15,7 +16,7 @@ from setuptools.command.sdist import sdist
 
 # Constants
 NODE_VERSION = "18.16.0"  # LTS version
-NODE_BINARIES_DIR = os.path.join("aws_cdk_bin", "node_binaries")
+NODE_BINARIES_DIR = os.path.join("aws_cdk_cli", "node_binaries")
 
 # Platform detection
 SYSTEM = platform.system().lower()
@@ -50,9 +51,24 @@ def read_long_description():
         return fh.read()
 
 
+def get_version():
+    """Get the CDK version from version.py."""
+    # Read version from version.py, no fallbacks
+    try:
+        with open(os.path.join("aws_cdk_cli", "version.py"), "r") as f:
+            version_content = f.read()
+            version_match = re.search(r'__version__\s*=\s*["\']([^"\']+)["\']', version_content)
+            if version_match:
+                return version_match.group(1)
+            else:
+                raise ValueError("Could not find __version__ in version.py")
+    except (IOError, FileNotFoundError) as e:
+        raise RuntimeError(f"Could not read version from version.py: {e}")
+
+
 def create_readme_for_node_binaries():
     """Create a README.txt file in the node_binaries directory."""
-    node_binaries_dir = os.path.join("aws_cdk_bin", "node_binaries")
+    node_binaries_dir = os.path.join("aws_cdk_cli", "node_binaries")
     os.makedirs(node_binaries_dir, exist_ok=True)
 
     readme_path = os.path.join(node_binaries_dir, "README.txt")
@@ -65,15 +81,13 @@ def create_readme_for_node_binaries():
 class CustomBuildPy(build_py):
     """Custom build command to validate CDK is available and setup node_binaries directory."""
     def run(self):
-        # Get the target CDK version
-        target_cdk_version = os.environ.get("CDK_VERSION")
-        if not target_cdk_version:
-            raise RuntimeError("CDK_VERSION environment variable not set. Cannot validate CDK installation.")
-
+        # Get version from our helper function
+        target_cdk_version = get_version()
+        
         print(f"Building with CDK version: {target_cdk_version}")
         
         # Validate CDK is present (should be downloaded by Makefile before build)
-        cdk_dir = os.path.join("aws_cdk_bin", "node_modules", "aws-cdk")
+        cdk_dir = os.path.join("aws_cdk_cli", "node_modules", "aws-cdk")
         
         if not os.path.exists(cdk_dir):
             raise RuntimeError(
@@ -118,7 +132,7 @@ class CustomBuildPy(build_py):
         # Create empty node_binaries directory structure
         # No need to download platform-specific binaries during build
         # They will be downloaded during post-install
-        node_binaries_dir = os.path.join("aws_cdk_bin", "node_binaries")
+        node_binaries_dir = os.path.join("aws_cdk_cli", "node_binaries")
         os.makedirs(node_binaries_dir, exist_ok=True)
         
         # Create README.txt in node_binaries directory
@@ -136,13 +150,13 @@ class CustomSdist(sdist):
         sdist.make_release_tree(self, base_dir, files)
 
         # Remove node_modules directory from the release tree
-        node_modules_dir = os.path.join(base_dir, "aws_cdk_bin", "node_modules")
+        node_modules_dir = os.path.join(base_dir, "aws_cdk_cli", "node_modules")
         if os.path.exists(node_modules_dir):
             print(f"Keeping aws-cdk in node_modules for source distribution")
             # No longer removing the aws-cdk directory
 
         # Remove node_binaries directory from the release tree
-        node_binaries_dir = os.path.join(base_dir, "aws_cdk_bin", "node_binaries")
+        node_binaries_dir = os.path.join(base_dir, "aws_cdk_cli", "node_binaries")
         if os.path.exists(node_binaries_dir):
             print(f"Removing {node_binaries_dir} from source distribution")
             shutil.rmtree(node_binaries_dir)
@@ -173,7 +187,7 @@ class PostInstallCommand(install):
         # Instead of importing aws_cdk directly, run the post_install script directly
         # This avoids the chicken-and-egg problem during installation
         post_install_script = os.path.join(
-            self.install_lib, "aws_cdk_bin", "post_install.py"
+            self.install_lib, "aws_cdk_cli", "post_install.py"
         )
         if os.path.exists(post_install_script):
             # Make the script executable
@@ -197,12 +211,12 @@ class PostDevelopCommand(develop):
     def _post_install(self):
         # Run the post_install script directly
         try:
-            import aws_cdk_bin.post_install
+            import aws_cdk_cli.post_install
 
-            aws_cdk_bin.post_install.main()
+            aws_cdk_cli.post_install.main()
         except ImportError as e:
             print(f"Warning: Failed to import post_install module: {e}")
-            post_install_script = os.path.join("aws_cdk_bin", "post_install.py")
+            post_install_script = os.path.join("aws_cdk_cli", "post_install.py")
             if os.path.exists(post_install_script):
                 # Make the script executable
                 os.chmod(post_install_script, 0o755)
@@ -216,16 +230,19 @@ class PostDevelopCommand(develop):
 
 # This setup function is used in legacy mode, but the main configuration is in pyproject.toml
 if __name__ == "__main__":
+    # Get version from version.py with fallbacks
+    cdk_version = get_version()
+
     setup(
-        name="aws-cdk-bin",
-        version=os.environ["CDK_VERSION"],
+        name="aws-cdk-cli",
+        version=cdk_version,
         description="Python wrapper for AWS CDK CLI with bundled Node.js runtime",
         long_description=read_long_description(),
         long_description_content_type="text/markdown",
-        url="https://github.com/rvben/aws-cdk-bin",
+        url="https://github.com/rvben/aws-cdk-wrapper",
         packages=find_packages(),
         package_data={
-            "aws_cdk_bin": [
+            "aws_cdk_cli": [
                 "node_modules/**/*",
                 "licenses/**/*",
                 # Include empty node_binaries directory structure
@@ -236,7 +253,7 @@ if __name__ == "__main__":
         include_package_data=True,
         entry_points={
             "console_scripts": [
-                "cdk=aws_cdk_bin.cli:main",
+                "cdk=aws_cdk_cli.cli:main",
             ],
         },
         install_requires=[

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from aws_cdk_bin.installer import (
+from aws_cdk_cli.installer import (
     find_system_nodejs, 
     get_nodejs_version, 
     get_cdk_node_requirements, 

@@ -24,13 +24,13 @@ Benefits:
 
 ```bash
 # Using pip
-pip install aws-cdk-wrapper
+pip install aws-cdk-cli
 
 # Using uv
-uv pip install aws-cdk-wrapper
+uv pip install aws-cdk-cli
 
 # Install a specific version
-pip install aws-cdk-wrapper==2.108.0
+pip install aws-cdk-cli==2.108.0
 ```
 
 Note: During installation, the package will download the appropriate Node.js binaries for your platform. This requires an internet connection for the initial setup.

@@ -1,5 +1,5 @@
 """
-AWS CDK Binary - A Python package for AWS CDK CLI with bundled Node.js.
+AWS CDK CLI - A Python wrapper for AWS CDK CLI with smart Node.js runtime management.
 
 This package provides a Python wrapper around the AWS CDK CLI tool (normally installed via npm),
 allowing Python developers to install and use the AWS CDK via pip/uv without requiring npm.

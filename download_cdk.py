@@ -20,7 +20,7 @@ CDK_PACKAGE_NAME = "aws-cdk"
 
 def download_cdk():
     """Download and bundle the AWS CDK code."""
-    node_modules_dir = os.path.join("aws_cdk_bin", "node_modules")
+    node_modules_dir = os.path.join("aws_cdk_cli", "node_modules")
 
     # Clean up any existing installations
     if os.path.exists(node_modules_dir):
@@ -192,7 +192,7 @@ def download_cdk():
 
 def update_version_file(version):
     """Update version.py with the current version."""
-    version_file = os.path.join("aws_cdk_bin", "version.py")
+    version_file = os.path.join("aws_cdk_cli", "version.py")
     if os.path.exists(version_file):
         with open(version_file, "r", encoding="utf-8") as f:
             content = f.read()

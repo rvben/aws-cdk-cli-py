@@ -9,8 +9,8 @@ clean:
 	rm -rf dist
 	rm -rf .venv
 	rm -rf temp
-	rm -rf aws_cdk_bin/node_binaries
-	rm -rf aws_cdk_bin/node_modules
+	rm -rf aws_cdk_cli/node_binaries
+	rm -rf aws_cdk_cli/node_modules
 
 fmt:
 	uv run --with ruff ruff format .
@@ -31,4 +31,4 @@ publish-prod:
 	twine upload --repository pypi dist/*
 
 verify: 
-	rm -rf .venv; uv venv; uv pip install dist/aws_cdk_bin-$(CDK_VERSION).tar.gz && ./.venv/bin/cdk --version
+	rm -rf .venv; uv venv; uv pip install dist/aws_cdk_cli-$(CDK_VERSION).tar.gz && ./.venv/bin/cdk --version
