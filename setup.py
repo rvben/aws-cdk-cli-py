@@ -269,9 +269,6 @@ if __name__ == "__main__":
             ],
         },
         install_requires=[
-            "setuptools",
-            "requests",  # For downloading Node.js binaries
-            "tqdm",  # For download progress bars
             'importlib_resources; python_version < "3.9"',  # For resource management
         ],
         python_requires=">=3.7",

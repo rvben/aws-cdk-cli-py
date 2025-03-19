@@ -13,6 +13,8 @@ import tarfile
 import json
 import hashlib
 import re
+import urllib.request
+import urllib.error
 
 # Import our custom modules instead of external dependencies
 from . import semver_helper as semver
@@ -108,19 +110,16 @@ def get_latest_cdk_version():
         except (subprocess.SubprocessError, FileNotFoundError):
             pass
 
-        # Last resort: try to fetch from npm registry using requests
+        # Last resort: try to fetch from npm registry using urllib
         try:
-            import requests
-
-            response = requests.get("https://registry.npmjs.org/aws-cdk/latest")
-            if response.status_code == 200:
-                data = response.json()
+            with urllib.request.urlopen("https://registry.npmjs.org/aws-cdk/latest") as response:
+                data = json.loads(response.read().decode('utf-8'))
                 return data.get("version")
-        except Exception:
+        except (urllib.error.HTTPError, Exception):
             pass
 
-        logger.error("Failed to get latest AWS CDK version from npm")
-        return None
+    logger.error("Failed to get latest AWS CDK version from npm")
+    return None
 
 
 def verify_node_binary(file_path, expected_checksum):
