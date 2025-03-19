@@ -4,13 +4,13 @@
 SHELL = /bin/bash
 PY = python3
 VENV = .venv
-BIN=$(VENV)/bin
 
 export BASH_ENV=$(VENV)/bin/activate
 
 CDK_VERSION ?= $(shell npm view aws-cdk version)
 
 $(VENV): pyproject.toml
+	@[[ -d $(VENV) ]] || uv venv --python-fetch automatic --python-preference only-managed -q
 	@uv sync
 	@touch $(VENV)
 
