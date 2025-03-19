@@ -1,0 +1,115 @@
+name: Build and Publish Package
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger on any tag starting with v
+
+jobs:
+  test:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ['3.8', '3.12']  # Test with oldest and newest supported Python
+
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          
+      - name: Get tag version
+        id: get_version
+        shell: bash
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+      
+      - name: Install uv
+        shell: bash
+        run: |
+          pip install uv
+      
+      - name: Set up test environment
+        shell: bash
+        run: |
+          uv venv
+          uv pip install pytest pytest-cov
+          uv pip install -e .
+      
+      - name: Run tests with make
+        shell: bash
+        env:
+          CDK_VERSION: ${{ steps.get_version.outputs.version }}
+        run: |
+          # Ensure make is installed on Windows
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            choco install make
+          fi
+          
+          # Run tests
+          make test
+
+  build-and-publish:
+    name: Build and publish package
+    needs: test  # Only run after tests pass on all platforms
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Get all tags for proper versioning
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          
+      - name: Get tag version
+        id: get_version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+      
+      - name: Install build dependencies
+        run: |
+          pip install uv twine
+          
+      - name: Build package with make
+        env:
+          CDK_VERSION: ${{ steps.get_version.outputs.version }}
+        run: |
+          echo "Building with CDK version $CDK_VERSION"
+          make build
+          
+      - name: Upload package as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: dist
+          path: dist/
+          
+      - name: Publish to Test PyPI with make
+        env:
+          TWINE_USERNAME: ${{ secrets.TEST_PYPI_USERNAME }}
+          TWINE_PASSWORD: ${{ secrets.TEST_PYPI_PASSWORD }}
+        run: |
+          make publish-test
+          
+      - name: Publish to PyPI with make
+        if: success()  # Only run if all previous steps succeeded
+        env:
+          TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
+          TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+        run: |
+          make publish-prod 
