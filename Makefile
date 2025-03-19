@@ -24,6 +24,9 @@ build: clean download-cdk
 	@python3 update_version.py $(CDK_VERSION)
 	uv build --sdist
 
+test:
+	.venv/bin/pytest --integration --slow .
+
 publish-test:
 	twine upload --repository testpypi dist/*
 
