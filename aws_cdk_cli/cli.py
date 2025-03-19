@@ -232,7 +232,7 @@ def main():
         logger.debug("Using Bun as JavaScript runtime if available")
     
     if args.use_bundled_node:
-        os.environ["AWS_CDK_CLI_FORCE_DOWNLOAD_NODE"] = "1"
+        os.environ["AWS_CDK_CLI_USE_BUNDLED_NODE"] = "1"
         logger.debug("Using bundled Node.js")
     
     if args.show_node_warnings:

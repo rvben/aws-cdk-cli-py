@@ -32,8 +32,8 @@ def bun_env():
     # Ensure other runtime selection variables are unset
     if 'AWS_CDK_CLI_USE_SYSTEM_NODE' in os.environ:
         del os.environ['AWS_CDK_CLI_USE_SYSTEM_NODE']
-    if 'AWS_CDK_CLI_FORCE_DOWNLOAD_NODE' in os.environ:
-        del os.environ['AWS_CDK_CLI_FORCE_DOWNLOAD_NODE']
+    if 'AWS_CDK_CLI_USE_BUNDLED_NODE' in os.environ:
+        del os.environ['AWS_CDK_CLI_USE_BUNDLED_NODE']
     
     yield
     

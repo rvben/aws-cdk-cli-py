@@ -27,8 +27,8 @@ def system_node_env():
     # Ensure other runtime selection variables are unset
     if 'AWS_CDK_CLI_USE_BUN' in os.environ:
         del os.environ['AWS_CDK_CLI_USE_BUN']
-    if 'AWS_CDK_CLI_FORCE_DOWNLOAD_NODE' in os.environ:
-        del os.environ['AWS_CDK_CLI_FORCE_DOWNLOAD_NODE']
+    if 'AWS_CDK_CLI_USE_BUNDLED_NODE' in os.environ:
+        del os.environ['AWS_CDK_CLI_USE_BUNDLED_NODE']
     
     yield
     
@@ -41,7 +41,7 @@ def system_node_env():
 def force_download_env():
     """Set up environment variables for forcing Node.js download."""
     old_env = os.environ.copy()
-    os.environ['AWS_CDK_CLI_FORCE_DOWNLOAD_NODE'] = '1'
+    os.environ['AWS_CDK_CLI_USE_BUNDLED_NODE'] = '1'
     
     # Ensure other runtime selection variables are unset
     if 'AWS_CDK_CLI_USE_BUN' in os.environ:
@@ -91,7 +91,7 @@ def test_is_nodejs_compatible():
 def test_setup_nodejs_default():
     """Test the default behavior of setup_nodejs."""
     # Ensure we reset any environment variables
-    for env_var in ['AWS_CDK_CLI_USE_SYSTEM_NODE', 'AWS_CDK_CLI_USE_BUN', 'AWS_CDK_CLI_FORCE_DOWNLOAD_NODE']:
+    for env_var in ['AWS_CDK_CLI_USE_SYSTEM_NODE', 'AWS_CDK_CLI_USE_BUN', 'AWS_CDK_CLI_USE_BUNDLED_NODE']:
         if env_var in os.environ:
             del os.environ[env_var]
     
@@ -143,7 +143,7 @@ def test_precedence_system_node_over_download():
     """Test that system Node.js takes precedence over forced download."""
     # Set both flags
     os.environ['AWS_CDK_CLI_USE_SYSTEM_NODE'] = '1'
-    os.environ['AWS_CDK_CLI_FORCE_DOWNLOAD_NODE'] = '1'
+    os.environ['AWS_CDK_CLI_USE_BUNDLED_NODE'] = '1'
     
     with patch('aws_cdk_cli.installer.download_node') as mock_download:
         # Ensure download is not called when system node takes precedence
@@ -160,4 +160,4 @@ def test_precedence_system_node_over_download():
         
     # Clean up
     del os.environ['AWS_CDK_CLI_USE_SYSTEM_NODE']
-    del os.environ['AWS_CDK_CLI_FORCE_DOWNLOAD_NODE'] 
+    del os.environ['AWS_CDK_CLI_USE_BUNDLED_NODE'] 

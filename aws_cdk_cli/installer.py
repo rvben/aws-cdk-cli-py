@@ -555,7 +555,7 @@ def setup_nodejs():
     Environment variables:
     - AWS_CDK_CLI_USE_BUN: If set, try to use Bun as the JavaScript runtime
     - AWS_CDK_CLI_USE_SYSTEM_NODE: If set, prefer using system Node.js over bundled
-    - AWS_CDK_CLI_FORCE_DOWNLOAD_NODE: If set, use bundled Node.js rather than system Node.js
+    - AWS_CDK_CLI_USE_BUNDLED_NODE: If set, use bundled Node.js rather than system Node.js
     - AWS_CDK_CLI_SHOW_NODE_WARNINGS: If set, show Node.js version compatibility warnings
     
     Returns:
@@ -567,7 +567,7 @@ def setup_nodejs():
     node_req = get_cdk_node_requirements()
     
     # Check if we should just download Node.js directly
-    force_download = os.environ.get("AWS_CDK_CLI_FORCE_DOWNLOAD_NODE") is not None
+    force_download = os.environ.get("AWS_CDK_CLI_USE_BUNDLED_NODE") is not None
     if force_download:
         logger.info("Using bundled Node.js")
         success, result = download_node()

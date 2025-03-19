@@ -120,7 +120,7 @@ def ensure_node_installed():
     Environment variables:
     - AWS_CDK_CLI_USE_SYSTEM_NODE: If set, prefer using system Node.js
     - AWS_CDK_CLI_USE_BUN: If set, try to use Bun as the JavaScript runtime
-    - AWS_CDK_CLI_FORCE_DOWNLOAD_NODE: If set, use bundled Node.js rather than system Node.js
+    - AWS_CDK_CLI_USE_BUNDLED_NODE: If set, use bundled Node.js rather than system Node.js
     
     Default behavior is to use system Node.js if available and compatible, then fall back to bundled Node.js.
     """
