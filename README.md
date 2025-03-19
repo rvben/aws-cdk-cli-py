@@ -1,24 +1,28 @@
 # AWS CDK Python Wrapper
 
-A Python package that provides a wrapper around the AWS CDK CLI tool, allowing Python developers to install and use AWS CDK via pip/uv instead of npm. This package downloads and uses a platform-specific Node.js runtime during installation, eliminating the need for a separate npm/Node.js installation.
+A Python package that provides a wrapper around the AWS CDK CLI tool, allowing Python developers to install and use AWS CDK via pip/uv instead of npm. This package bundles the AWS CDK code and either uses your system's Node.js installation or downloads a platform-specific Node.js runtime during installation.
 
 ## How It Works
 
-This package uses a source-only distribution approach:
-1. When installed, it downloads the appropriate Node.js binaries for your specific platform (Windows, macOS, or Linux)
-2. It bundles the AWS CDK JavaScript code but downloads platform-specific binaries on demand
-3. This approach keeps the package size small while ensuring compatibility across platforms
+This package follows a hybrid approach:
+1. It bundles the AWS CDK JavaScript code with the package
+2. For Node.js, it either:
+   - Uses your system's Node.js installation if available (default)
+   - Downloads appropriate Node.js binaries for your platform during installation
+3. This approach ensures compatibility across platforms while leveraging existing Node.js installations when possible
 
 ## Why Use This Package?
 
-If you're a Python developer working with AWS CDK, you typically need to install Node.js and npm first, then install the CDK CLI globally using npm. This wrapper eliminates that requirement by downloading a minimal Node.js runtime and bundling the CDK CLI code directly into a Python package.
+If you're a Python developer working with AWS CDK, you typically need to install Node.js and npm first, then install the CDK CLI globally using npm. This wrapper simplifies this by:
+- Bundling the CDK CLI code directly into a Python package
+- Using your existing Node.js installation or downloading a minimal Node.js runtime
 
 Benefits:
-- No need to install or configure Node.js/npm
+- No need to install npm or manage global npm packages
 - Works in environments where npm installation is restricted
 - Keeps AWS CDK installations isolated in Python virtual environments
 - Consistent CDK versioning tied to your Python dependencies
-- Optimized package size with platform-specific binary downloads
+- Optimized package size with platform-specific binary downloads only when needed
 
 ## Installation
 
@@ -37,16 +41,14 @@ Note: During installation, the package will download the appropriate Node.js bin
 
 ## Features
 
-- **Zero npm dependency**: No need to install Node.js or npm on your system
-- **Platform support**: Downloads appropriate Node.js binaries for Windows, macOS, and Linux
+- **No npm dependency**: Eliminates the need for npm while still requiring Node.js (either system or bundled)
+- **Platform support**: Downloads appropriate Node.js binaries for Windows, macOS, and Linux when needed
 - **Automatic updates**: Stays in sync with official AWS CDK releases
 - **Seamless integration**: Use the same CDK commands you're familiar with
 - **Offline caching**: Downloaded binaries are cached for offline usage
 - **License compliance**: Includes all necessary license texts
 - **Optimized size**: Only downloads the binaries needed for your platform
-- **Uses bundled Node.js runtime**
-- **Can use system Node.js if available (optional)**
-- **Supports Bun as an alternative JavaScript runtime (optional)**
+- **Flexible runtime options**: Can use system Node.js, bundled Node.js, or Bun runtime
 - **Compatible with Windows, macOS, and Linux**
 - **Supports both x86_64 and ARM64 architectures**
 
