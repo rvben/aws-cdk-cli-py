@@ -185,9 +185,9 @@ def main():
         help="Use Bun as the JavaScript runtime (requires Bun v1.1.0+)",
     )
     runtime_control.add_argument(
-        "--force-download-node",
+        "--use-bundled-node",
         action="store_true",
-        help="Force downloading bundled Node.js even if system has it",
+        help="Use the bundled Node.js instead of system Node.js",
     )
     runtime_control.add_argument(
         "--show-node-warnings",
@@ -231,20 +231,20 @@ def main():
         os.environ["AWS_CDK_CLI_USE_BUN"] = "1"
         logger.debug("Using Bun as JavaScript runtime if available")
     
-    if args.force_download_node:
+    if args.use_bundled_node:
         os.environ["AWS_CDK_CLI_FORCE_DOWNLOAD_NODE"] = "1"
-        logger.debug("Forcing download of bundled Node.js")
+        logger.debug("Using bundled Node.js")
     
     if args.show_node_warnings:
         os.environ["AWS_CDK_CLI_SHOW_NODE_WARNINGS"] = "1"
         logger.debug("Showing Node.js version compatibility warnings")
         
     # Check for incompatible combinations
-    if args.use_system_node and args.force_download_node:
-        logger.warning("Both --use-system-node and --force-download-node specified. Using system Node.js takes precedence.")
+    if args.use_system_node and args.use_bundled_node:
+        logger.warning("Both --use-system-node and --use-bundled-node specified. Using system Node.js takes precedence.")
     
-    if args.use_bun and args.force_download_node:
-        logger.warning("Both --use-bun and --force-download-node specified. Bun will be tried first.")
+    if args.use_bun and args.use_bundled_node:
+        logger.warning("Both --use-bun and --use-bundled-node specified. Bun will be tried first.")
     
     if args.use_bun and args.use_system_node:
         logger.warning("Both --use-bun and --use-system-node specified. Bun will be tried first.")

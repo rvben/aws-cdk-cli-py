@@ -6,7 +6,11 @@ Pytest test file for Bun runtime detection and compatibility.
 import pytest
 from unittest.mock import patch
 import os
-import semver
+import sys
+
+# Use our custom semver_helper
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from aws_cdk_cli import semver_helper as semver
 
 from aws_cdk_cli.installer import (
     find_system_bun,
@@ -54,7 +58,7 @@ def test_get_bun_version():
     if bun_path:
         version = get_bun_version(bun_path)
         assert version is not None
-        assert semver.VersionInfo.is_valid(version)
+        assert semver.is_valid(version)
 
 
 @pytest.mark.integration
@@ -66,7 +70,7 @@ def test_get_bun_reported_nodejs_version():
         if bun_version and semver.compare(bun_version, MIN_BUN_VERSION) >= 0:
             version = get_bun_reported_nodejs_version(bun_path)
             assert version is not None
-            assert semver.VersionInfo.is_valid(version)
+            assert semver.is_valid(version)
 
 
 @pytest.mark.integration

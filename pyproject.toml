@@ -25,20 +25,22 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
-    "setuptools",
-    "requests",  # For downloading Node.js binaries
-    "tqdm",      # For download progress bars
-    "semver>=3.0.0",  # For Node.js version compatibility checks
-    "importlib_resources; python_version < '3.9'",  # For resource management
+    # No external dependencies - everything needed is bundled
 ]
 dynamic = ["version"]
 
+[dependency-groups]
+dev = [
+    "pytest>=7.0.0",  # For running tests
+    "black>=23.1.0",  # For code formatting
+    "ruff>=0.0.254",  # For linting
+]
+
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.0.0",
-    "pytest-cov>=4.0.0",
-    "twine>=4.0.0",
-    "build>=0.10.0",
+    "pytest>=7.0.0",  # For running tests
+    "black>=23.1.0",  # For code formatting
+    "ruff>=0.0.254",  # For linting
 ]
 docs = [
     "sphinx>=6.0.0",

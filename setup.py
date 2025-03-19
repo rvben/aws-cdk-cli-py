@@ -193,7 +193,10 @@ class PostInstallCommand(install):
             # Make the script executable
             os.chmod(post_install_script, 0o755)
             # Run the script with the current Python interpreter
-            subprocess.check_call([sys.executable, post_install_script])
+            # Set PYTHONPATH to include the installation directory
+            env = os.environ.copy()
+            env['PYTHONPATH'] = self.install_lib
+            subprocess.check_call([sys.executable, post_install_script], env=env)
         else:
             print(
                 f"Warning: Post-installation script not found at {post_install_script}"

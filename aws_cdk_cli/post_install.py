@@ -15,6 +15,10 @@ import urllib.request
 import tempfile
 import zipfile
 import tarfile
+from pathlib import Path
+
+# Import our custom progress module
+import aws_cdk_cli.progress as progress
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -174,37 +178,13 @@ def download_node():
     # Download the Node.js binaries with progress bar
     temp_file = tempfile.NamedTemporaryFile(delete=False)
     try:
-        # Try to import tqdm for progress bar
-        try:
-            from tqdm import tqdm
-
-            # Get the file size
-            with urllib.request.urlopen(node_url) as response:
-                file_size = int(response.headers.get("Content-Length", 0))
-
-            # Download with progress bar
-            with tqdm(
-                total=file_size,
-                unit="B",
-                unit_scale=True,
-                desc=f"Downloading Node.js v{NODE_VERSION}",
-            ) as progress_bar:
-
-                def report_progress(block_count, block_size, total_size):
-                    progress_bar.update(block_size)
-
-                urllib.request.urlretrieve(
-                    node_url, temp_file.name, reporthook=report_progress
-                )
-
-        except ImportError:
-            # Fallback to simple download without progress bar
-            logger.info("Progress bar not available. Downloading...")
-            with urllib.request.urlopen(node_url) as response, open(
-                temp_file.name, "wb"
-            ) as out_file:
-                shutil.copyfileobj(response, out_file)
-
+        # Download with progress bar
+        progress.download_with_progress(
+            url=node_url, 
+            file_path=temp_file.name,
+            desc=f"Downloading Node.js v{NODE_VERSION}"
+        )
+        
         # Close the file before extracting (important for Windows)
         temp_file.close()
 
@@ -271,7 +251,6 @@ def get_cdk_script_path():
     except ImportError:
         # Fallback implementation
         return os.path.join(PACKAGE_DIR, "node_modules", "aws-cdk", "bin", "cdk.js")
-
 
 
 def main():

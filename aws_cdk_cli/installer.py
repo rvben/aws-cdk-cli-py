@@ -15,7 +15,12 @@ import json
 import hashlib
 import datetime
 import re
-import semver
+import platform
+from pathlib import Path
+
+# Import our custom modules instead of external dependencies
+from . import semver_helper as semver
+from . import progress
 
 from aws_cdk_cli import (
     NODE_MODULES_DIR,
@@ -189,51 +194,31 @@ def download_node():
         logger.debug("Downloading a fresh copy of Node.js")
         temp_file = tempfile.NamedTemporaryFile(delete=False).name
         try:
-            # Try to import tqdm for progress bar
-            try:
-                from tqdm import tqdm
+            # Download with progress bar using our custom module
+            progress.download_with_progress(
+                url=node_url,
+                file_path=temp_file,
+                desc=f"Downloading Node.js v{NODE_VERSION}"
+            )
+            
+            # Verify the download
+            if not is_valid_archive(temp_file):
+                raise ValueError("Downloaded file is not a valid archive")
 
-                # Get the file size
-                with urllib.request.urlopen(node_url) as response:
-                    file_size = int(response.headers.get("Content-Length", 0))
-
-                # Download with progress bar
-                with tqdm(
-                    total=file_size,
-                    unit="B",
-                    unit_scale=True,
-                    desc=f"Downloading Node.js v{NODE_VERSION}",
-                ) as progress_bar:
-
-                    def report_progress(block_count, block_size, total_size):
-                        progress_bar.update(block_size)
-
-                    urllib.request.urlretrieve(
-                        node_url, temp_file, reporthook=report_progress
-                    )
-
-            except ImportError:
-                # Fallback to simple download without progress bar
-                logger.info("Progress bar not available. Downloading...")
-                with urllib.request.urlopen(node_url) as response, open(
-                    temp_file, "wb"
-                ) as out_file:
-                    shutil.copyfileobj(response, out_file)
-
-            # Cache the downloaded archive for future use
-            shutil.copy(temp_file, cached_archive)
-            logger.info(f"Cached Node.js binaries to: {cached_archive}")
-            return temp_file, None
-
+            # Cache the downloaded file
+            os.makedirs(os.path.dirname(cached_archive), exist_ok=True)
+            shutil.copy2(temp_file, cached_archive)
+            logger.debug(f"Cached Node.js archive at {cached_archive}")
+            return cached_archive
         except Exception as e:
-            error_msg = f"Failed to download Node.js: {e}"
-            logger.error(error_msg)
+            logger.error(f"Error downloading Node.js: {e}")
             if os.path.exists(temp_file):
-                try:
-                    os.unlink(temp_file)
-                except Exception:
-                    pass
-            return None, error_msg
+                os.unlink(temp_file)
+            raise
+        finally:
+            # Clean up the temporary file
+            if os.path.exists(temp_file):
+                os.unlink(temp_file)
 
     def is_valid_archive(file_path):
         """Check if the file is a valid archive."""
@@ -250,61 +235,50 @@ def download_node():
         except Exception:
             return False
 
-    # Check if we have a cached archive
-    use_cached = False
+    # Try to download a fresh copy if needed
     if os.path.exists(cached_archive):
-        logger.info(f"Using cached Node.js binaries: {cached_archive}")
-        # Validate cached archive before using it
-        if is_valid_archive(cached_archive):
-            temp_file = cached_archive
-            use_cached = True
-        else:
-            logger.warning(
-                f"Cached file is invalid or corrupted, removing: {cached_archive}"
-            )
-            try:
-                os.unlink(cached_archive)
-            except Exception as e:
-                logger.warning(f"Failed to delete invalid cache file: {e}")
-
-            # Download a fresh copy
-            temp_file, error = download_fresh_copy()
-            if not temp_file:
-                return False, error
+        logger.debug(f"Using cached Node.js archive: {cached_archive}")
+        download_path = cached_archive
     else:
-        # Download a fresh copy
-        temp_file, error = download_fresh_copy()
-        if not temp_file:
-            return False, error
+        try:
+            download_path = download_fresh_copy()
+        except Exception as e:
+            return False, f"Failed to download Node.js: {e}"
 
+    # Extract the archive
     try:
-        # Extract the Node.js binaries
-        if archive_ext == "zip":
-            with zipfile.ZipFile(temp_file, "r") as zip_ref:
-                # The filter parameter was added in Python 3.12
-                if sys.version_info >= (3, 12):
-                    zip_ref.extractall(NODE_PLATFORM_DIR, filter="data")
-                else:
-                    # For older Python versions, just use regular extractall
-                    zip_ref.extractall(NODE_PLATFORM_DIR)
-        else:  # .tar.gz
-            with tarfile.open(temp_file, "r:gz") as tar_ref:
-                # The filter parameter was added in Python 3.12
-                if sys.version_info >= (3, 12):
-                    # Use 'data' filter to avoid the deprecation warning in Python 3.14+
-                    tar_ref.extractall(NODE_PLATFORM_DIR, filter="data")
-                else:
-                    # For older Python versions, just use regular extractall
-                    tar_ref.extractall(NODE_PLATFORM_DIR)
+        extract_dir = os.path.dirname(NODE_PLATFORM_DIR)
+        os.makedirs(extract_dir, exist_ok=True)
+
+        logger.debug(f"Extracting Node.js archive to {extract_dir}")
+        if cached_archive.endswith(".zip"):
+            with zipfile.ZipFile(download_path, "r") as zip_ref:
+                zip_ref.extractall(extract_dir)
+        else:
+            with tarfile.open(download_path, "r:*") as tar_ref:
+                def is_within_directory(directory, target):
+                    abs_directory = os.path.abspath(directory)
+                    abs_target = os.path.abspath(target)
+                    prefix = os.path.commonprefix([abs_directory, abs_target])
+                    return prefix == abs_directory
+
+                def safe_extract(tar, path=".", members=None, *, numeric_owner=False):
+                    for member in tar.getmembers():
+                        member_path = os.path.join(path, member.name)
+                        if not is_within_directory(path, member_path):
+                            raise Exception("Attempted Path Traversal in Tar File")
+                    tar.extractall(path, members, numeric_owner=numeric_owner)
+
+                safe_extract(tar_ref, extract_dir)
 
         logger.info(f"Node.js binaries extracted to {NODE_PLATFORM_DIR}")
 
         # If we used a temporary file (not a cached one), delete it
-        if temp_file != cached_archive and os.path.exists(temp_file):
+        if download_path != cached_archive and os.path.exists(download_path):
             try:
-                os.unlink(temp_file)
+                os.unlink(download_path)
             except Exception as e:
-                logger.warning(f"Could not delete temporary file {temp_file}: {e}")
+                logger.warning(f"Could not delete temporary file {download_path}: {e}")
 
         # Get node binary path from runtime helper instead of direct path
         from aws_cdk_cli.runtime import get_node_path
@@ -581,7 +555,7 @@ def setup_nodejs():
     Environment variables:
     - AWS_CDK_CLI_USE_BUN: If set, try to use Bun as the JavaScript runtime
     - AWS_CDK_CLI_USE_SYSTEM_NODE: If set, prefer using system Node.js over bundled
-    - AWS_CDK_CLI_FORCE_DOWNLOAD_NODE: If set, force download of bundled Node.js
+    - AWS_CDK_CLI_FORCE_DOWNLOAD_NODE: If set, use bundled Node.js rather than system Node.js
     - AWS_CDK_CLI_SHOW_NODE_WARNINGS: If set, show Node.js version compatibility warnings
     
     Returns:
@@ -595,7 +569,7 @@ def setup_nodejs():
     # Check if we should just download Node.js directly
     force_download = os.environ.get("AWS_CDK_CLI_FORCE_DOWNLOAD_NODE") is not None
     if force_download:
-        logger.info("Forcing download of bundled Node.js")
+        logger.info("Using bundled Node.js")
         success, result = download_node()
         if success:
             logger.debug(f"Successfully downloaded Node.js to {NODE_BIN_PATH}")

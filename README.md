@@ -111,13 +111,13 @@ Requirements for using Bun:
 
 If no compatible system Node.js is found, the wrapper will use its bundled Node.js runtime, which is downloaded during installation. This is guaranteed to be a version that's compatible with AWS CDK.
 
-### Forcing download of bundled Node.js
+### Using bundled Node.js explicitly
 
 ```bash
-cdk --force-download-node [commands...]
+cdk --use-bundled-node [commands...]
 ```
 
-This forces downloading and using the bundled Node.js even if a compatible system Node.js is available.
+This explicitly uses the bundled Node.js even if a compatible system Node.js is available.
 
 ## Environment Variables
 
@@ -129,7 +129,7 @@ The package respects the following environment variables:
 - All standard AWS CDK environment variables
 - `AWS_CDK_BIN_USE_SYSTEM_NODE=1`: Use system Node.js if available
 - `AWS_CDK_BIN_USE_BUN=1`: Use Bun as the JavaScript runtime
-- `AWS_CDK_BIN_FORCE_DOWNLOAD_NODE=1`: Force download of bundled Node.js
+- `AWS_CDK_BIN_FORCE_DOWNLOAD_NODE=1`: Use bundled Node.js instead of system Node.js
 
 ## License Information
 
