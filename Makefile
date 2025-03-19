@@ -37,7 +37,7 @@ build: clean download-cdk
 	uv build --sdist
 
 test: $(VENV)
-	pytest --integration --slow .
+	uv run pytest --integration --slow .
 
 publish-test: $(VENV)
 	twine upload --repository testpypi dist/*
