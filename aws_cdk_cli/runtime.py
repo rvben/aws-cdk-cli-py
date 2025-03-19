@@ -1,4 +1,4 @@
-"""Runtime utilities for aws-cdk-bin package."""
+"""Runtime utilities for aws-cdk-cli package."""
 
 import os
 import platform
@@ -28,7 +28,7 @@ elif MACHINE in ("arm64", "aarch64"):
 
 
 def get_package_dir():
-    """Get the directory where the aws-cdk-bin package is installed."""
+    """Get the directory where the aws-cdk-cli package is installed."""
     return os.path.dirname(os.path.abspath(__file__))
 
 

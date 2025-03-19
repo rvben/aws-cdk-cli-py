@@ -16,9 +16,9 @@ import tempfile
 import zipfile
 import tarfile
 from pathlib import Path
-
-# Import our custom progress module
-import aws_cdk_cli.progress as progress
+import ast
+import json
+import aws_cdk_cli.download as download
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -179,10 +179,9 @@ def download_node():
     temp_file = tempfile.NamedTemporaryFile(delete=False)
     try:
         # Download with progress bar
-        progress.download_with_progress(
+        download.download_file(
             url=node_url, 
-            file_path=temp_file.name,
-            desc=f"Downloading Node.js v{NODE_VERSION}"
+            file_path=temp_file.name
         )
         
         # Close the file before extracting (important for Windows)

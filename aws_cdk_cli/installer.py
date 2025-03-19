@@ -20,7 +20,7 @@ from pathlib import Path
 
 # Import our custom modules instead of external dependencies
 from . import semver_helper as semver
-from . import progress
+from . import download
 
 from aws_cdk_cli import (
     NODE_MODULES_DIR,
@@ -72,7 +72,7 @@ NODE_CHECKSUMS = {
 }
 
 # Define cache directory for storing downloaded files
-CACHE_DIR = os.path.join(os.path.expanduser("~"), ".cache", "aws-cdk-bin")
+CACHE_DIR = os.path.join(os.path.expanduser("~"), ".cache", "aws-cdk-cli")
 
 
 def check_npm_available():
@@ -195,10 +195,9 @@ def download_node():
         temp_file = tempfile.NamedTemporaryFile(delete=False).name
         try:
             # Download with progress bar using our custom module
-            progress.download_with_progress(
+            download.download_file(
                 url=node_url,
-                file_path=temp_file,
-                desc=f"Downloading Node.js v{NODE_VERSION}"
+                file_path=temp_file
             )
             
             # Verify the download

@@ -123,13 +123,10 @@ This explicitly uses the bundled Node.js even if a compatible system Node.js is 
 
 The package respects the following environment variables:
 
-- `AWS_CDK_OFFLINE`: Set to "1" to use cached packages without network access
 - `AWS_CDK_DEBUG`: Set to "1" for verbose debug output
-- `HTTP_PROXY` / `HTTPS_PROXY`: Used for network connections if set
-- All standard AWS CDK environment variables
-- `AWS_CDK_BIN_USE_SYSTEM_NODE=1`: Use system Node.js if available
-- `AWS_CDK_BIN_USE_BUN=1`: Use Bun as the JavaScript runtime
-- `AWS_CDK_BIN_FORCE_DOWNLOAD_NODE=1`: Use bundled Node.js instead of system Node.js
+- `AWS_CDK_CLI_USE_SYSTEM_NODE=1`: Use system Node.js if available
+- `AWS_CDK_CLI_USE_BUN=1`: Use Bun as the JavaScript runtime
+- `AWS_CDK_CLI_USE_BUNDLED_NODE=1`: Use bundled Node.js instead of system Node.js
 
 ## License Information
 

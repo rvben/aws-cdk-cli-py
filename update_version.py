@@ -9,7 +9,7 @@ if not version:
 
 os.makedirs("aws_cdk_cli", exist_ok=True)
 with open("aws_cdk_cli/version.py", "w") as f:
-    f.write(f'''"""Version information for aws-cdk-bin package.
+    f.write(f'''"""Version information for aws-cdk-cli package.
 
 This file is auto-generated during the build process.
 It contains the AWS CDK version information.

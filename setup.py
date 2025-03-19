@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Setup script for aws-cdk-bin package."""
+"""Setup script for aws-cdk-cli package."""
 
 import os
 import sys
