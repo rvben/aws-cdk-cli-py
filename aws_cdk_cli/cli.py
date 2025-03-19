@@ -26,7 +26,7 @@ from aws_cdk_cli import (
 from aws_cdk_cli.installer import install_cdk, setup_nodejs
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+logging.basicConfig(level=logging.WARNING, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -208,8 +208,11 @@ def main():
     # Setup logging level
     if args.verbose:
         logging.root.setLevel(logging.DEBUG)
-        logging.getLogger("aws-cdk-runtime").setLevel(logging.DEBUG)
         logging.getLogger("aws_cdk_cli").setLevel(logging.DEBUG)
+    else:
+        # When not in verbose mode, set to WARNING level to hide runtime selection messages
+        logging.root.setLevel(logging.WARNING)
+        logging.getLogger("aws_cdk_cli").setLevel(logging.WARNING)
 
     # Handle --wrapper-version
     if args.wrapper_version:

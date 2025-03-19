@@ -20,7 +20,7 @@ download-cdk:
 	@echo "Downloading CDK version $(CDK_VERSION)..."
 	@python3 download_cdk.py
 
-build: download-cdk
+build: clean download-cdk
 	@python3 update_version.py $(CDK_VERSION)
 	uv build --sdist
 

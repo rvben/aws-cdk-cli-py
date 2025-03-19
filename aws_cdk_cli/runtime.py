@@ -113,9 +113,11 @@ def get_cdk_path():
 
 def ensure_node_installed():
     """
-    Ensure JavaScript runtime (Node.js or Bun) is installed and available.
+    Ensure that a suitable JavaScript runtime (Node.js or Bun) is installed and available.
     
-    Respects environment variables:
+    Returns the path to the JavaScript runtime if available, or None if not.
+    
+    Environment variables:
     - AWS_CDK_CLI_USE_SYSTEM_NODE: If set, prefer using system Node.js
     - AWS_CDK_CLI_USE_BUN: If set, try to use Bun as the JavaScript runtime
     - AWS_CDK_CLI_FORCE_DOWNLOAD_NODE: If set, force downloading Node.js
@@ -130,7 +132,7 @@ def ensure_node_installed():
     success, result = setup_nodejs()
     
     if success:
-        logger.info(f"Using JavaScript runtime: {result}")
+        logger.debug(f"Using JavaScript runtime: {result}")
         return result
     else:
         logger.error(f"Failed to set up JavaScript runtime: {result}")

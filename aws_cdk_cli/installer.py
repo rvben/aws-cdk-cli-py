@@ -571,96 +571,81 @@ def is_nodejs_compatible(version, requirement_str):
 
 def setup_nodejs():
     """
-    Set up JavaScript runtime for AWS CDK (Node.js or Bun).
+    Find or download a suitable Node.js runtime.
     
-    Environment variables that control behavior:
-    - AWS_CDK_CLI_USE_SYSTEM_NODE: If set, prefer using system Node.js over bundled
+    Order of preference:
+    1. Bun (if AWS_CDK_CLI_USE_BUN is set)
+    2. System Node.js (if compatible with CDK requirements or AWS_CDK_CLI_USE_SYSTEM_NODE is set)
+    3. Bundled Node.js (downloaded if not present)
+    
+    Environment variables:
     - AWS_CDK_CLI_USE_BUN: If set, try to use Bun as the JavaScript runtime
-    - AWS_CDK_CLI_FORCE_DOWNLOAD_NODE: If set, always download Node.js regardless of existing installation
+    - AWS_CDK_CLI_USE_SYSTEM_NODE: If set, prefer using system Node.js over bundled
+    - AWS_CDK_CLI_FORCE_DOWNLOAD_NODE: If set, force download of bundled Node.js
+    - AWS_CDK_CLI_SHOW_NODE_WARNINGS: If set, show Node.js version compatibility warnings
     
     Returns:
-        tuple: (success, path_to_js_runtime_executable or error_message)
+        Tuple of (success, result) where:
+            success: Boolean indicating if a suitable JavaScript runtime was found
+            result: Path to JavaScript runtime or error message if not found
     """
-    # Check environment variables
-    force_system_node = os.environ.get("AWS_CDK_CLI_USE_SYSTEM_NODE") == "1"
-    use_bun = os.environ.get("AWS_CDK_CLI_USE_BUN") == "1"
-    force_download = os.environ.get("AWS_CDK_CLI_FORCE_DOWNLOAD_NODE") == "1"
-    
-    logger.debug(f"Setup JS runtime - force_system_node: {force_system_node}, use_bun: {use_bun}, force_download: {force_download}")
-    
-    # Get CDK's Node.js version requirements
+    # Get CDK Node.js requirements
     node_req = get_cdk_node_requirements()
-    logger.debug(f"CDK Node.js requirements: {node_req}")
     
-    # If we're forcing multiple options, establish precedence
-    if force_system_node and force_download:
-        logger.warning("Both AWS_CDK_CLI_USE_SYSTEM_NODE and AWS_CDK_CLI_FORCE_DOWNLOAD_NODE are set.")
-        logger.warning("AWS_CDK_CLI_USE_SYSTEM_NODE takes precedence.")
-        force_download = False
-    
-    # If we're forcing download, do that first and exit
-    if force_download and not use_bun:
+    # Check if we should just download Node.js directly
+    force_download = os.environ.get("AWS_CDK_CLI_FORCE_DOWNLOAD_NODE") is not None
+    if force_download:
         logger.info("Forcing download of bundled Node.js")
         success, result = download_node()
         if success:
-            logger.info(f"Successfully downloaded Node.js to {NODE_BIN_PATH}")
+            logger.debug(f"Successfully downloaded Node.js to {NODE_BIN_PATH}")
             return True, NODE_BIN_PATH
         else:
             logger.error(f"Failed to download Node.js: {result}")
-            # Fall through to other methods if download fails
+            return False, result
     
-    # Try Bun first (if requested or by default)
+    # Try Bun only if explicitly requested
+    use_bun = os.environ.get("AWS_CDK_CLI_USE_BUN") is not None
     if use_bun:
-        # Check if Bun is available
         bun_path = find_system_bun()
         if bun_path:
-            # Check Bun version and compatibility
-            bun_version = get_bun_version(bun_path)
-            if bun_version:
-                logger.debug(f"Found Bun v{bun_version} at {bun_path}")
+            try:
+                bun_version = get_bun_version(bun_path)
+                reported_version = get_bun_reported_nodejs_version(bun_path)
+                is_compatible = is_bun_compatible_with_cdk(bun_path, node_req)
                 
-                # Check if Bun version is at least 1.1.0 (for --eval support)
-                if semver.compare(bun_version, MIN_BUN_VERSION) >= 0:
-                    # Check if Bun is compatible with CDK
-                    is_compatible, reported_version = is_bun_compatible_with_cdk(bun_path, node_req)
-                    
-                    if is_compatible:
-                        logger.info(f"Using Bun v{bun_version} at {bun_path}")
-                        logger.info(f"Bun reports as Node.js v{reported_version}, compatible with AWS CDK requirements: {node_req}")
-                        return True, bun_path
-                    else:
-                        logger.info(f"Bun v{bun_version} reports as Node.js v{reported_version}, which is not compatible with AWS CDK requirements: {node_req}")
+                if is_compatible:
+                    logger.debug(f"Using Bun v{bun_version} at {bun_path}")
+                    logger.debug(f"Bun reports as Node.js v{reported_version}, compatible with AWS CDK requirements: {node_req}")
+                    return True, bun_path
                 else:
-                    logger.info(f"Bun v{bun_version} is less than minimum required version {MIN_BUN_VERSION}")
-            else:
-                logger.info(f"Could not determine Bun version at {bun_path}")
+                    logger.debug(f"Bun v{bun_version} reports as Node.js v{reported_version}, which is not compatible with AWS CDK requirements: {node_req}")
+            except Exception:
+                logger.debug(f"Bun v{bun_version} is less than minimum required version {MIN_BUN_VERSION}")
         else:
-            logger.info("Bun not found on the system")
-        
-        # If Bun was requested but not suitable, fall back to system Node.js if available
-        logger.info("Could not use Bun as runtime, falling back to system Node.js")
-    
-    # Try system Node.js next (always if force_system_node=True, or by default)
-    # Check if system Node.js is available
+            logger.debug("Bun not found on the system")
+        logger.debug("Could not use Bun as runtime, falling back to system Node.js")
+            
+    # Try to use system Node.js if it's compatible or explicitly requested
+    force_system_node = os.environ.get("AWS_CDK_CLI_USE_SYSTEM_NODE") is not None
     system_node = find_system_nodejs()
-    logger.debug(f"System Node.js found: {system_node}")
+    
     if system_node:
         node_version = get_nodejs_version(system_node)
-        logger.debug(f"System Node.js version: {node_version}")
         if node_version:
             # Check if this version is compatible with CDK's requirements
             is_compatible = is_nodejs_compatible(node_version, node_req)
             
             if is_compatible or force_system_node:
                 if is_compatible:
-                    logger.info(f"Using system Node.js v{node_version} at {system_node}")
-                    logger.info(f"Compatible with AWS CDK requirements: {node_req}")
+                    logger.debug(f"Using system Node.js v{node_version} at {system_node}")
+                    logger.debug(f"Compatible with AWS CDK requirements: {node_req}")
                 else:
                     logger.warning(f"System Node.js v{node_version} may not be compatible with AWS CDK requirements: {node_req}")
                     logger.warning("Using anyway because AWS_CDK_CLI_USE_SYSTEM_NODE is set")
                 return True, system_node
             else:
-                logger.info(f"System Node.js v{node_version} is not compatible with AWS CDK requirements: {node_req}")
+                logger.debug(f"System Node.js v{node_version} is not compatible with AWS CDK requirements: {node_req}")
     else:
         if force_system_node:
             logger.error("System Node.js requested but not found. Cannot continue.")
@@ -670,14 +655,14 @@ def setup_nodejs():
     
     # Finally, check if we already have a bundled Node.js
     if is_node_installed():
-        logger.info(f"Using bundled Node.js at {NODE_BIN_PATH}")
+        logger.debug(f"Using bundled Node.js at {NODE_BIN_PATH}")
         return True, NODE_BIN_PATH
     
     # If no suitable runtime found yet, download Node.js
     logger.info("No suitable JavaScript runtime found. Downloading bundled Node.js...")
     success, result = download_node()
     if success:
-        logger.info(f"Successfully downloaded Node.js to {NODE_BIN_PATH}")
+        logger.debug(f"Successfully downloaded Node.js to {NODE_BIN_PATH}")
         return True, NODE_BIN_PATH
     else:
         logger.error(f"Failed to download Node.js: {result}")
