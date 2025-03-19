@@ -24,6 +24,7 @@ from pathlib import Path
 import logging
 import importlib.resources
 from .version import __version__
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)

@@ -12,7 +12,8 @@ import tarfile
 import shutil
 import json
 import datetime
-import requests
+import urllib.request
+import urllib.error
 
 # Constants
 CDK_PACKAGE_NAME = "aws-cdk"
@@ -72,15 +73,13 @@ def download_cdk():
             registry_url = f"https://registry.npmjs.org/{CDK_PACKAGE_NAME}/-/{CDK_PACKAGE_NAME}-{version}.tgz"
 
             print(f"Downloading from URL: {registry_url}")
-            # Download the tarball
-            with requests.get(registry_url) as response:
-                if response.status_code != 200:
-                    raise RuntimeError(
-                        f"Failed to download AWS CDK: HTTP {response.status_code}"
-                    )
-
-                with open(tar_file, "wb") as out_file:
-                    out_file.write(response.content)
+            # Download the tarball using urllib instead of requests
+            try:
+                with urllib.request.urlopen(registry_url) as response:
+                    with open(tar_file, "wb") as out_file:
+                        out_file.write(response.read())
+            except urllib.error.HTTPError as e:
+                raise RuntimeError(f"Failed to download AWS CDK: HTTP {e.code}")
 
             print(f"Successfully downloaded {tar_file}")
 
@@ -163,13 +162,13 @@ def download_cdk():
                     print(
                         f"WARNING: Installed version {installed_version} doesn't match requested version {version}"
                     )
-        
+
         # Check if bin directory and CDK script exist
         bin_dir = os.path.join(node_modules_dir, CDK_PACKAGE_NAME, "bin")
         if not os.path.exists(bin_dir):
             print(f"ERROR: AWS CDK bin directory not found at {bin_dir}")
             return False
-        
+
         # Check for cdk script in the bin directory
         for script_name in ["cdk", "cdk.js", "cdk.cmd"]:
             script_path = os.path.join(bin_dir, script_name)

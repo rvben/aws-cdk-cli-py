@@ -7,16 +7,12 @@ import sys
 import subprocess
 import logging
 import shutil
-import urllib.request
 import tempfile
 import zipfile
 import tarfile
 import json
 import hashlib
-import datetime
 import re
-import platform
-from pathlib import Path
 
 # Import our custom modules instead of external dependencies
 from . import semver_helper as semver
@@ -26,7 +22,6 @@ from aws_cdk_cli import (
     NODE_MODULES_DIR,
     NODE_PLATFORM_DIR,
     NODE_BIN_PATH,
-    CDK_SCRIPT_PATH,
     SYSTEM,
     MACHINE,
     is_cdk_installed,
@@ -195,11 +190,8 @@ def download_node():
         temp_file = tempfile.NamedTemporaryFile(delete=False).name
         try:
             # Download with progress bar using our custom module
-            download.download_file(
-                url=node_url,
-                file_path=temp_file
-            )
-            
+            download.download_file(url=node_url, file_path=temp_file)
+
             # Verify the download
             if not is_valid_archive(temp_file):
                 raise ValueError("Downloaded file is not a valid archive")
@@ -255,6 +247,7 @@ def download_node():
                 zip_ref.extractall(extract_dir)
         else:
             with tarfile.open(download_path, "r:*") as tar_ref:
+
                 def is_within_directory(directory, target):
                     abs_directory = os.path.abspath(directory)
                     abs_target = os.path.abspath(target)
@@ -321,7 +314,7 @@ def download_node():
 def find_system_nodejs():
     """
     Find the Node.js executable on the system PATH and return its path.
-    
+
     Returns:
         str: Path to the Node.js executable, or None if not found
     """
@@ -331,30 +324,34 @@ def find_system_nodejs():
             node_cmd = "where.exe node"
         else:
             node_cmd = "which node"
-            
+
         result = subprocess.run(node_cmd, shell=True, capture_output=True, text=True)
         if result.returncode == 0:
-            node_path = result.stdout.strip().split('\n')[0]  # Take the first one if multiple
+            node_path = result.stdout.strip().split("\n")[
+                0
+            ]  # Take the first one if multiple
             if os.path.exists(node_path) and os.access(node_path, os.X_OK):
                 return node_path
     except Exception as e:
         logger.debug(f"Error finding system Node.js: {e}")
-    
+
     return None
 
 
 def get_nodejs_version(node_path):
     """
     Get the version of Node.js from the given executable path.
-    
+
     Args:
         node_path (str): Path to the Node.js executable
-        
+
     Returns:
         str: Version string (without v prefix), or None if failed
     """
     try:
-        result = subprocess.run([node_path, "--version"], capture_output=True, text=True)
+        result = subprocess.run(
+            [node_path, "--version"], capture_output=True, text=True
+        )
         if result.returncode == 0:
             version = result.stdout.strip()
             # Remove the 'v' prefix if present
@@ -363,14 +360,14 @@ def get_nodejs_version(node_path):
             return version
     except Exception as e:
         logger.debug(f"Error getting Node.js version: {e}")
-    
+
     return None
 
 
 def get_cdk_node_requirements():
     """
     Extract the Node.js version requirements from CDK's package.json.
-    
+
     Returns:
         str: Node.js version requirement string (e.g. ">= 14.15.0"), or None if not found
     """
@@ -379,17 +376,17 @@ def get_cdk_node_requirements():
         if not os.path.exists(package_json_path):
             logger.debug("AWS CDK package.json not found")
             return None
-            
+
         with open(package_json_path, "r") as f:
             package_data = json.load(f)
-            
+
         # Extract Node.js version requirements from the engines field
         node_requirement = package_data.get("engines", {}).get("node")
         if node_requirement:
             return node_requirement
     except Exception as e:
         logger.debug(f"Error reading CDK Node.js requirements: {e}")
-    
+
     # Default fallback requirement if we can't determine
     return ">= 14.15.0"  # Conservative default based on recent CDK versions
 
@@ -397,58 +394,60 @@ def get_cdk_node_requirements():
 def get_supported_nodejs_versions():
     """
     Get the minimum supported Node.js version directly from CDK's package.json or a conservative estimate.
-    
+
     Returns:
         str: The minimum supported Node.js version
     """
     # First try to get requirements from package.json
     node_req = get_cdk_node_requirements()
-    
+
     if node_req:
         # Extract minimum from requirement string
         min_version = None
-        
+
         try:
             # Handle multiple requirements separated by ||
             if "||" in node_req:
                 # Take the lowest min from all options
                 reqs = node_req.split("||")
                 min_versions = []
-                
+
                 for req in reqs:
                     req = req.strip()
                     curr_min = extract_min_from_req(req)
                     if curr_min:
                         min_versions.append(curr_min)
-                
+
                 if min_versions:
-                    min_version = min(min_versions, key=lambda v: [int(x) for x in v.split(".")])
+                    min_version = min(
+                        min_versions, key=lambda v: [int(x) for x in v.split(".")]
+                    )
             else:
                 # Single requirement
                 min_version = extract_min_from_req(node_req)
         except Exception as e:
             logger.debug(f"Error parsing Node.js requirement '{node_req}': {e}")
-    
+
     # Conservative default based on current CDK support
     if not min_version:
         min_version = "14.15.0"  # Minimum supported by recent CDK
-        
+
     return min_version
 
 
 def extract_min_from_req(req):
     """
     Extract minimum version from a requirement string.
-    
+
     Args:
         req (str): Requirement string (e.g. ">= 14.15.0" or "^18.0.0")
-        
+
     Returns:
         str: extracted minimum version or None if couldn't extract
     """
     req = req.strip()
     min_version = None
-    
+
     # Handle >= or >
     if req.startswith(">="):
         min_version = req.replace(">=", "").strip()
@@ -458,31 +457,31 @@ def extract_min_from_req(req):
         version_parts = base_version.split(".")
         version_parts[-1] = str(int(version_parts[-1]) + 1)
         min_version = ".".join(version_parts)
-    
+
     # Handle ^
     elif req.startswith("^"):
         min_version = req.replace("^", "").strip()
-    
+
     # Handle range with hyphen (x.y.z - a.b.c)
     elif " - " in req:
         parts = req.split(" - ")
         min_version = parts[0].strip()
-    
+
     # Handle exact version
     elif re.match(r"^\d+\.\d+\.\d+$", req):
         min_version = req
-        
+
     return min_version
 
 
 def is_nodejs_compatible(version, requirement_str):
     """
     Check if the Node.js version is compatible with the requirement.
-    
+
     Args:
         version (str): Node.js version to check (e.g. "16.14.2")
         requirement_str (str): Requirement string (e.g. ">= 14.15.0")
-        
+
     Returns:
         bool: True if compatible, False otherwise
     """
@@ -494,17 +493,17 @@ def is_nodejs_compatible(version, requirement_str):
             except Exception:
                 # If satisfies fails, fall back to other methods
                 pass
-        
+
         # Handle various requirement formats manually
         req = requirement_str.strip()
-        
+
         # Get min version from the requirement
         min_version = extract_min_from_req(req)
-        
+
         # Check if version meets minimum requirement
         if min_version:
             return semver.compare(version, min_version) >= 0
-            
+
         # Basic pattern matching for common version requirement formats
         if req.startswith(">="):
             min_version = req.replace(">=", "").strip()
@@ -527,16 +526,20 @@ def is_nodejs_compatible(version, requirement_str):
             parts = req.split(" - ")
             min_version = parts[0].strip()
             max_version = parts[1].strip()
-            return (semver.compare(version, min_version) >= 0 and 
-                    semver.compare(version, max_version) <= 0)
+            return (
+                semver.compare(version, min_version) >= 0
+                and semver.compare(version, max_version) <= 0
+            )
         elif re.match(r"^\d+\.\d+\.\d+$", req):
             # Exact version match
             return semver.compare(version, req) == 0
-            
+
         # If we can't parse the requirement, be conservative
-        logger.warning(f"Could not parse Node.js version requirement: {requirement_str}")
+        logger.warning(
+            f"Could not parse Node.js version requirement: {requirement_str}"
+        )
         return False
-        
+
     except Exception as e:
         logger.debug(f"Error checking Node.js compatibility: {e}")
         return False
@@ -545,18 +548,18 @@ def is_nodejs_compatible(version, requirement_str):
 def setup_nodejs():
     """
     Find or download a suitable Node.js runtime.
-    
+
     Order of preference:
     1. Bun (if AWS_CDK_CLI_USE_BUN is set)
     2. System Node.js (if compatible with CDK requirements or AWS_CDK_CLI_USE_SYSTEM_NODE is set)
     3. Bundled Node.js (downloaded if not present)
-    
+
     Environment variables:
     - AWS_CDK_CLI_USE_BUN: If set, try to use Bun as the JavaScript runtime
     - AWS_CDK_CLI_USE_SYSTEM_NODE: If set, prefer using system Node.js over bundled
     - AWS_CDK_CLI_USE_BUNDLED_NODE: If set, use bundled Node.js rather than system Node.js
     - AWS_CDK_CLI_SHOW_NODE_WARNINGS: If set, show Node.js version compatibility warnings
-    
+
     Returns:
         Tuple of (success, result) where:
             success: Boolean indicating if a suitable JavaScript runtime was found
@@ -564,7 +567,7 @@ def setup_nodejs():
     """
     # Get CDK Node.js requirements
     node_req = get_cdk_node_requirements()
-    
+
     # Check if we should just download Node.js directly
     force_download = os.environ.get("AWS_CDK_CLI_USE_BUNDLED_NODE") is not None
     if force_download:
@@ -576,7 +579,7 @@ def setup_nodejs():
         else:
             logger.error(f"Failed to download Node.js: {result}")
             return False, result
-    
+
     # Try Bun only if explicitly requested
     use_bun = os.environ.get("AWS_CDK_CLI_USE_BUN") is not None
     if use_bun:
@@ -586,51 +589,65 @@ def setup_nodejs():
                 bun_version = get_bun_version(bun_path)
                 reported_version = get_bun_reported_nodejs_version(bun_path)
                 is_compatible = is_bun_compatible_with_cdk(bun_path, node_req)
-                
+
                 if is_compatible:
                     logger.debug(f"Using Bun v{bun_version} at {bun_path}")
-                    logger.debug(f"Bun reports as Node.js v{reported_version}, compatible with AWS CDK requirements: {node_req}")
+                    logger.debug(
+                        f"Bun reports as Node.js v{reported_version}, compatible with AWS CDK requirements: {node_req}"
+                    )
                     return True, bun_path
                 else:
-                    logger.debug(f"Bun v{bun_version} reports as Node.js v{reported_version}, which is not compatible with AWS CDK requirements: {node_req}")
+                    logger.debug(
+                        f"Bun v{bun_version} reports as Node.js v{reported_version}, which is not compatible with AWS CDK requirements: {node_req}"
+                    )
             except Exception:
-                logger.debug(f"Bun v{bun_version} is less than minimum required version {MIN_BUN_VERSION}")
+                logger.debug(
+                    f"Bun v{bun_version} is less than minimum required version {MIN_BUN_VERSION}"
+                )
         else:
             logger.debug("Bun not found on the system")
         logger.debug("Could not use Bun as runtime, falling back to system Node.js")
-            
+
     # Try to use system Node.js if it's compatible or explicitly requested
     force_system_node = os.environ.get("AWS_CDK_CLI_USE_SYSTEM_NODE") is not None
     system_node = find_system_nodejs()
-    
+
     if system_node:
         node_version = get_nodejs_version(system_node)
         if node_version:
             # Check if this version is compatible with CDK's requirements
             is_compatible = is_nodejs_compatible(node_version, node_req)
-            
+
             if is_compatible or force_system_node:
                 if is_compatible:
-                    logger.debug(f"Using system Node.js v{node_version} at {system_node}")
+                    logger.debug(
+                        f"Using system Node.js v{node_version} at {system_node}"
+                    )
                     logger.debug(f"Compatible with AWS CDK requirements: {node_req}")
                 else:
-                    logger.warning(f"System Node.js v{node_version} may not be compatible with AWS CDK requirements: {node_req}")
-                    logger.warning("Using anyway because AWS_CDK_CLI_USE_SYSTEM_NODE is set")
+                    logger.warning(
+                        f"System Node.js v{node_version} may not be compatible with AWS CDK requirements: {node_req}"
+                    )
+                    logger.warning(
+                        "Using anyway because AWS_CDK_CLI_USE_SYSTEM_NODE is set"
+                    )
                 return True, system_node
             else:
-                logger.debug(f"System Node.js v{node_version} is not compatible with AWS CDK requirements: {node_req}")
+                logger.debug(
+                    f"System Node.js v{node_version} is not compatible with AWS CDK requirements: {node_req}"
+                )
     else:
         if force_system_node:
             logger.error("System Node.js requested but not found. Cannot continue.")
             return False, "System Node.js not found"
         else:
             logger.debug("No system Node.js found")
-    
+
     # Finally, check if we already have a bundled Node.js
     if is_node_installed():
         logger.debug(f"Using bundled Node.js at {NODE_BIN_PATH}")
         return True, NODE_BIN_PATH
-    
+
     # If no suitable runtime found yet, download Node.js
     logger.info("No suitable JavaScript runtime found. Downloading bundled Node.js...")
     success, result = download_node()
@@ -729,7 +746,7 @@ def update_cdk():
 def find_system_bun():
     """
     Find the Bun executable on the system PATH and return its path.
-    
+
     Returns:
         str: Path to the Bun executable, or None if not found
     """
@@ -739,25 +756,27 @@ def find_system_bun():
             bun_cmd = "where.exe bun"
         else:
             bun_cmd = "which bun"
-            
+
         result = subprocess.run(bun_cmd, shell=True, capture_output=True, text=True)
         if result.returncode == 0:
-            bun_path = result.stdout.strip().split('\n')[0]  # Take the first one if multiple
+            bun_path = result.stdout.strip().split("\n")[
+                0
+            ]  # Take the first one if multiple
             if os.path.exists(bun_path) and os.access(bun_path, os.X_OK):
                 return bun_path
     except Exception as e:
         logger.debug(f"Error finding system Bun: {e}")
-    
+
     return None
 
 
 def get_bun_version(bun_path):
     """
     Get the version of Bun from the given executable path.
-    
+
     Args:
         bun_path (str): Path to the Bun executable
-        
+
     Returns:
         str: Version string (without v prefix), or None if failed
     """
@@ -775,17 +794,17 @@ def get_bun_version(bun_path):
             return version
     except Exception as e:
         logger.debug(f"Error getting Bun version: {e}")
-    
+
     return None
 
 
 def get_bun_reported_nodejs_version(bun_path):
     """
     Get the Node.js version that Bun reports itself as.
-    
+
     Args:
         bun_path (str): Path to the Bun executable
-        
+
     Returns:
         str: Node.js version string, or None if failed
     """
@@ -793,8 +812,8 @@ def get_bun_reported_nodejs_version(bun_path):
         # Use --eval flag to get process.version
         result = subprocess.run(
             [bun_path, "--eval", "console.log(process.version)"],
-            capture_output=True, 
-            text=True
+            capture_output=True,
+            text=True,
         )
         if result.returncode == 0:
             version = result.stdout.strip()
@@ -804,33 +823,35 @@ def get_bun_reported_nodejs_version(bun_path):
             return version
     except Exception as e:
         logger.debug(f"Error getting Bun's reported Node.js version: {e}")
-    
+
     return None
 
 
 def is_bun_compatible_with_cdk(bun_path, node_req):
     """
     Check if Bun is compatible with AWS CDK based on its reported Node.js version.
-    
+
     Args:
         bun_path (str): Path to the Bun executable
         node_req (str): Node.js version requirement string from CDK
-        
+
     Returns:
         tuple: (is_compatible, reported_nodejs_version)
     """
     # First check if Bun version is at least 1.1.0 (needed for --eval support)
     bun_version = get_bun_version(bun_path)
     if not bun_version or semver.compare(bun_version, MIN_BUN_VERSION) < 0:
-        logger.info(f"Bun version {bun_version} is less than minimum required {MIN_BUN_VERSION}")
+        logger.info(
+            f"Bun version {bun_version} is less than minimum required {MIN_BUN_VERSION}"
+        )
         return False, None
-    
+
     # Get the Node.js version that Bun reports
     reported_version = get_bun_reported_nodejs_version(bun_path)
     if not reported_version:
         logger.info("Could not determine Bun's reported Node.js version")
         return False, None
-    
+
     # Check if this reported version is compatible with CDK requirements
     is_compatible = is_nodejs_compatible(reported_version, node_req)
     return is_compatible, reported_version

@@ -31,9 +31,10 @@ dynamic = ["version"]
 
 [dependency-groups]
 dev = [
-    "pytest>=7.0.0",  # For running tests
-    "black>=23.1.0",  # For code formatting
-    "ruff>=0.0.254",  # For linting
+    "pytest>=7.0.0", # For running tests
+    "black>=23.1.0", # For code formatting
+    "ruff>=0.0.254", # For linting
+    "pytest-cov>=5.0.0",
 ]
 
 [project.optional-dependencies]

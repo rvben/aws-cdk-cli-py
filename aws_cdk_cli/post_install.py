@@ -9,15 +9,9 @@ import os
 import sys
 import logging
 import platform
-import subprocess
-import shutil
-import urllib.request
 import tempfile
 import zipfile
 import tarfile
-from pathlib import Path
-import ast
-import json
 import aws_cdk_cli.download as download
 
 # Configure logging
@@ -179,11 +173,8 @@ def download_node():
     temp_file = tempfile.NamedTemporaryFile(delete=False)
     try:
         # Download with progress bar
-        download.download_file(
-            url=node_url, 
-            file_path=temp_file.name
-        )
-        
+        download.download_file(url=node_url, file_path=temp_file.name)
+
         # Close the file before extracting (important for Windows)
         temp_file.close()
 

@@ -8,9 +8,7 @@ import sys
 import subprocess
 import tempfile
 import pytest
-from pathlib import Path
 
-import aws_cdk_cli
 
 
 @pytest.mark.slow
@@ -29,16 +27,20 @@ def test_installation():
 
         # Install the package in development mode
         result = subprocess.run(
-            [python_executable, "-m", "pip", "install", "-e", "."], 
+            [python_executable, "-m", "pip", "install", "-e", "."],
             check=False,
             capture_output=True,
-            text=True
+            text=True,
         )
         assert result.returncode == 0, f"Failed to install package: {result.stderr}"
 
         # Test importing the package
         result = subprocess.run(
-            [python_executable, "-c", "import aws_cdk_cli; print(aws_cdk_cli.__version__)"],
+            [
+                python_executable,
+                "-c",
+                "import aws_cdk_cli; print(aws_cdk_cli.__version__)",
+            ],
             capture_output=True,
             text=True,
         )
@@ -63,26 +65,32 @@ def test_cdk_init():
     with tempfile.TemporaryDirectory() as tmp_dir:
         original_dir = os.getcwd()
         os.chdir(tmp_dir)
-        
+
         try:
             # Mock the CDK command to avoid actually running the init
             with pytest.MonkeyPatch.context() as mp:
                 mp.setattr("aws_cdk_cli.runtime.run_cdk", lambda args: 0)
-                
+
                 result = subprocess.run(
-                    [sys.executable, "-m", "aws_cdk_cli.cli", "init", "app", "--language=python"],
+                    [
+                        sys.executable,
+                        "-m",
+                        "aws_cdk_cli.cli",
+                        "init",
+                        "app",
+                        "--language=python",
+                    ],
                     capture_output=True,
                     text=True,
                 )
-                assert result.returncode == 0, f"Failed to run CDK init command: {result.stderr}"
+                assert result.returncode == 0, (
+                    f"Failed to run CDK init command: {result.stderr}"
+                )
         finally:
             os.chdir(original_dir)
 
 
-@pytest.mark.parametrize("command", [
-    "--help",
-    "--wrapper-version"
-])
+@pytest.mark.parametrize("command", ["--help", "--wrapper-version"])
 def test_cdk_commands(command):
     """Test various CDK commands that don't require an app context."""
     result = subprocess.run(
@@ -105,4 +113,4 @@ def test_cdk_with_custom_command():
     # The --version flag should work without an app
     assert result.returncode == 0, f"Failed to run CDK command: {result.stderr}"
     # Check if the output contains a version string like "2.xxxx.x"
-    assert any(part.strip().startswith(("2.", "1.")) for part in result.stdout.split()) 
+    assert any(part.strip().startswith(("2.", "1.")) for part in result.stdout.split())

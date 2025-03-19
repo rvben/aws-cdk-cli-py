@@ -99,33 +99,33 @@ def setup_mock_env():
     # Create a temporary directory structure
     system = platform.system().lower()
     machine = platform.machine().lower()
-    
+
     # Normalize machine names for testing
     if machine in ("amd64", "x86_64"):
         machine = "x86_64"
     elif machine in ("arm64", "aarch64"):
         machine = "aarch64" if system == "linux" else "arm64"
-    
+
     # Create node binary directory structure
     binary_dir = Path(aws_cdk_cli.__file__).parent / "node_binaries" / system / machine
     binary_dir.mkdir(parents=True, exist_ok=True)
-    
+
     if system == "windows":
         node_path = binary_dir / "node.exe"
     else:
         node_path = binary_dir / "node"
-    
+
     # Create a dummy node executable for testing
     if not node_path.exists():
         with open(node_path, "w") as f:
             f.write("#!/bin/sh\necho 'v99.99.99'\n")
-        
+
         # Make the file executable
         if system != "windows":
             node_path.chmod(0o755)
-    
+
     yield
-    
+
     # No cleanup needed as files are in the package directory
 
 

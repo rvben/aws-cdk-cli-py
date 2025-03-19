@@ -57,7 +57,9 @@ def get_version():
     try:
         with open(os.path.join("aws_cdk_cli", "version.py"), "r") as f:
             version_content = f.read()
-            version_match = re.search(r'__version__\s*=\s*["\']([^"\']+)["\']', version_content)
+            version_match = re.search(
+                r'__version__\s*=\s*["\']([^"\']+)["\']', version_content
+            )
             if version_match:
                 return version_match.group(1)
             else:
@@ -80,22 +82,23 @@ def create_readme_for_node_binaries():
 
 class CustomBuildPy(build_py):
     """Custom build command to validate CDK is available and setup node_binaries directory."""
+
     def run(self):
         # Get version from our helper function
         target_cdk_version = get_version()
-        
+
         print(f"Building with CDK version: {target_cdk_version}")
-        
+
         # Validate CDK is present (should be downloaded by Makefile before build)
         cdk_dir = os.path.join("aws_cdk_cli", "node_modules", "aws-cdk")
-        
+
         if not os.path.exists(cdk_dir):
             raise RuntimeError(
                 f"AWS CDK directory not found at {cdk_dir}. "
                 "CDK should be downloaded before running build. "
                 "Please run 'make download-cdk' first."
             )
-            
+
         # Verify the installed version matches target
         package_json_path = os.path.join(cdk_dir, "package.json")
         if not os.path.exists(package_json_path):
@@ -103,20 +106,24 @@ class CustomBuildPy(build_py):
                 f"AWS CDK package.json not found at {package_json_path}. "
                 "CDK installation appears to be incomplete."
             )
-            
-        with open(package_json_path, 'r') as f:
+
+        with open(package_json_path, "r") as f:
             package_data = json.load(f)
             installed_version = package_data.get("version")
             print(f"Found CDK version: {installed_version}")
-            
+
             if installed_version != target_cdk_version:
-                print(f"WARNING: Installed CDK version {installed_version} doesn't match target {target_cdk_version}")
-        
+                print(
+                    f"WARNING: Installed CDK version {installed_version} doesn't match target {target_cdk_version}"
+                )
+
         # Check if CDK binaries are present
         bin_dir = os.path.join(cdk_dir, "bin")
         if not os.path.exists(bin_dir):
-            raise RuntimeError(f"AWS CDK bin directory not found at {bin_dir}. CDK installation appears to be incomplete.")
-            
+            raise RuntimeError(
+                f"AWS CDK bin directory not found at {bin_dir}. CDK installation appears to be incomplete."
+            )
+
         # Check for the CDK script files
         found_script = False
         for script_name in ["cdk", "cdk.js", "cdk.cmd"]:
@@ -125,19 +132,21 @@ class CustomBuildPy(build_py):
                 print(f"Found CDK script: {script_path}")
                 found_script = True
                 break
-                
+
         if not found_script:
-            raise RuntimeError("No CDK scripts found in bin directory. CDK installation appears to be incomplete.")
-        
+            raise RuntimeError(
+                "No CDK scripts found in bin directory. CDK installation appears to be incomplete."
+            )
+
         # Create empty node_binaries directory structure
         # No need to download platform-specific binaries during build
         # They will be downloaded during post-install
         node_binaries_dir = os.path.join("aws_cdk_cli", "node_binaries")
         os.makedirs(node_binaries_dir, exist_ok=True)
-        
+
         # Create README.txt in node_binaries directory
         create_readme_for_node_binaries()
-                
+
         build_py.run(self)
 
 
@@ -152,7 +161,7 @@ class CustomSdist(sdist):
         # Remove node_modules directory from the release tree
         node_modules_dir = os.path.join(base_dir, "aws_cdk_cli", "node_modules")
         if os.path.exists(node_modules_dir):
-            print(f"Keeping aws-cdk in node_modules for source distribution")
+            print("Keeping aws-cdk in node_modules for source distribution")
             # No longer removing the aws-cdk directory
 
         # Remove node_binaries directory from the release tree
@@ -195,7 +204,7 @@ class PostInstallCommand(install):
             # Run the script with the current Python interpreter
             # Set PYTHONPATH to include the installation directory
             env = os.environ.copy()
-            env['PYTHONPATH'] = self.install_lib
+            env["PYTHONPATH"] = self.install_lib
             subprocess.check_call([sys.executable, post_install_script], env=env)
         else:
             print(

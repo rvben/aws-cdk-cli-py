@@ -171,7 +171,7 @@ def main():
         action="store_true",
         help="Print the version of the Python wrapper",
     )
-    
+
     # Add JavaScript runtime control arguments
     runtime_control = parser.add_argument_group("JavaScript Runtime Options")
     runtime_control.add_argument(
@@ -194,10 +194,11 @@ def main():
         action="store_true",
         help="Show Node.js version compatibility warnings (hidden by default)",
     )
-    
+
     # Add verbose mode
     parser.add_argument(
-        "--verbose", "-v",
+        "--verbose",
+        "-v",
         action="store_true",
         help="Show verbose output",
     )
@@ -220,34 +221,40 @@ def main():
         print(f"Bundled CDK v{version.__cdk_version__}")
         print(f"Bundled Node.js v{version.__node_version__}")
         return 0
-        
+
     # If runtime control options are provided, set them as environment vars
     # so they can be passed to the installer/runtime modules
     if args.use_system_node:
         os.environ["AWS_CDK_CLI_USE_SYSTEM_NODE"] = "1"
         logger.debug("Using system Node.js if available")
-    
+
     if args.use_bun:
         os.environ["AWS_CDK_CLI_USE_BUN"] = "1"
         logger.debug("Using Bun as JavaScript runtime if available")
-    
+
     if args.use_bundled_node:
         os.environ["AWS_CDK_CLI_USE_BUNDLED_NODE"] = "1"
         logger.debug("Using bundled Node.js")
-    
+
     if args.show_node_warnings:
         os.environ["AWS_CDK_CLI_SHOW_NODE_WARNINGS"] = "1"
         logger.debug("Showing Node.js version compatibility warnings")
-        
+
     # Check for incompatible combinations
     if args.use_system_node and args.use_bundled_node:
-        logger.warning("Both --use-system-node and --use-bundled-node specified. Using system Node.js takes precedence.")
-    
+        logger.warning(
+            "Both --use-system-node and --use-bundled-node specified. Using system Node.js takes precedence."
+        )
+
     if args.use_bun and args.use_bundled_node:
-        logger.warning("Both --use-bun and --use-bundled-node specified. Bun will be tried first.")
-    
+        logger.warning(
+            "Both --use-bun and --use-bundled-node specified. Bun will be tried first."
+        )
+
     if args.use_bun and args.use_system_node:
-        logger.warning("Both --use-bun and --use-system-node specified. Bun will be tried first.")
+        logger.warning(
+            "Both --use-bun and --use-system-node specified. Bun will be tried first."
+        )
 
     # Run the CDK CLI with the remaining arguments
     return runtime.run_cdk(remaining)

@@ -53,13 +53,6 @@ jobs:
         run: |
           pip install uv
       
-      - name: Set up test environment
-        shell: bash
-        run: |
-          uv venv
-          uv pip install pytest pytest-cov
-          uv pip install -e .
-      
       - name: Run tests with make
         shell: bash
         env:
