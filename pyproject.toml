@@ -27,6 +27,7 @@ dependencies = [
     "setuptools",
     "requests",  # For downloading Node.js binaries
     "tqdm",      # For download progress bars
+    "semver>=3.0.0",  # For Node.js version compatibility checks
     "importlib_resources; python_version < '3.9'",  # For resource management
 ]
 dynamic = ["version"]

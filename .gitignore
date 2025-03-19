@@ -70,3 +70,4 @@ test_cdk_project/
 
 # Cursor specific files
 .cursorrules
+aws_cdk_bin/version.py

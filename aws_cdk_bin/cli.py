@@ -23,7 +23,7 @@ from aws_cdk_bin import (
     SYSTEM,
     MACHINE,
 )
-from aws_cdk_bin.installer import install_cdk, download_node
+from aws_cdk_bin.installer import install_cdk, setup_nodejs
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -44,11 +44,11 @@ def run_cdk_command(args, capture_output=False, env=None):
     """
     # Ensure Node.js and CDK are installed
     if not is_node_installed():
-        logger.info("Node.js is not installed. Installing...")
-        success, error = download_node()
+        logger.info("Node.js is not installed. Setting up...")
+        success, result = setup_nodejs()
         if not success:
             error_msg = (
-                f"Failed to install Node.js. Cannot run CDK commands. Error: {error}"
+                f"Failed to set up Node.js. Cannot run CDK commands. Error: {result}"
             )
             logger.error(error_msg)
             if capture_output:
@@ -171,9 +171,45 @@ def main():
         action="store_true",
         help="Print the version of the Python wrapper",
     )
+    
+    # Add JavaScript runtime control arguments
+    runtime_control = parser.add_argument_group("JavaScript Runtime Options")
+    runtime_control.add_argument(
+        "--use-system-node",
+        action="store_true",
+        help="Use system Node.js installation if available and compatible",
+    )
+    runtime_control.add_argument(
+        "--use-bun",
+        action="store_true",
+        help="Use Bun as the JavaScript runtime (requires Bun v1.1.0+)",
+    )
+    runtime_control.add_argument(
+        "--force-download-node",
+        action="store_true",
+        help="Force downloading bundled Node.js even if system has it",
+    )
+    runtime_control.add_argument(
+        "--show-node-warnings",
+        action="store_true",
+        help="Show Node.js version compatibility warnings (hidden by default)",
+    )
+    
+    # Add verbose mode
+    parser.add_argument(
+        "--verbose", "-v",
+        action="store_true",
+        help="Show verbose output",
+    )
 
     # Parse known arguments, the rest will be passed to CDK CLI
     args, remaining = parser.parse_known_args()
+
+    # Setup logging level
+    if args.verbose:
+        logging.root.setLevel(logging.DEBUG)
+        logging.getLogger("aws-cdk-runtime").setLevel(logging.DEBUG)
+        logging.getLogger("aws_cdk_bin").setLevel(logging.DEBUG)
 
     # Handle --wrapper-version
     if args.wrapper_version:
@@ -181,6 +217,34 @@ def main():
         print(f"Bundled CDK v{version.__cdk_version__}")
         print(f"Bundled Node.js v{version.__node_version__}")
         return 0
+        
+    # If runtime control options are provided, set them as environment vars
+    # so they can be passed to the installer/runtime modules
+    if args.use_system_node:
+        os.environ["AWS_CDK_BIN_USE_SYSTEM_NODE"] = "1"
+        logger.debug("Using system Node.js if available")
+    
+    if args.use_bun:
+        os.environ["AWS_CDK_BIN_USE_BUN"] = "1"
+        logger.debug("Using Bun as JavaScript runtime if available")
+    
+    if args.force_download_node:
+        os.environ["AWS_CDK_BIN_FORCE_DOWNLOAD_NODE"] = "1"
+        logger.debug("Forcing download of bundled Node.js")
+    
+    if args.show_node_warnings:
+        os.environ["AWS_CDK_BIN_SHOW_NODE_WARNINGS"] = "1"
+        logger.debug("Showing Node.js version compatibility warnings")
+        
+    # Check for incompatible combinations
+    if args.use_system_node and args.force_download_node:
+        logger.warning("Both --use-system-node and --force-download-node specified. Using system Node.js takes precedence.")
+    
+    if args.use_bun and args.force_download_node:
+        logger.warning("Both --use-bun and --force-download-node specified. Bun will be tried first.")
+    
+    if args.use_bun and args.use_system_node:
+        logger.warning("Both --use-bun and --use-system-node specified. Bun will be tried first.")
 
     # Run the CDK CLI with the remaining arguments
     return runtime.run_cdk(remaining)

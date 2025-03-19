@@ -44,6 +44,11 @@ Note: During installation, the package will download the appropriate Node.js bin
 - **Offline caching**: Downloaded binaries are cached for offline usage
 - **License compliance**: Includes all necessary license texts
 - **Optimized size**: Only downloads the binaries needed for your platform
+- **Uses bundled Node.js runtime**
+- **Can use system Node.js if available (optional)**
+- **Supports Bun as an alternative JavaScript runtime (optional)**
+- **Compatible with Windows, macOS, and Linux**
+- **Supports both x86_64 and ARM64 architectures**
 
 ## Usage
 
@@ -69,106 +74,48 @@ cdk --update      # Update to the latest AWS CDK version
 cdk --offline     # Run in offline mode using cached packages
 ```
 
-## How It Works
+## JavaScript Runtime Options
 
-This package:
-1. Bundles a lightweight Node.js runtime specific to your platform
-2. Includes the AWS CDK JavaScript code directly in the package
-3. Creates Python wrappers that forward commands to the bundled Node.js runtime
-4. Handles path resolution and execution of the underlying CDK commands
+The wrapper supports various JavaScript runtimes in the following priority order:
 
-## Supported Platforms
+### Using system Node.js (default)
 
-- Windows (x86_64)
-- macOS (Intel and Apple Silicon)
-- Linux (x86_64 and ARM64)
+By default, the wrapper first checks if you have Node.js installed on your system. It will use your system Node.js installation if it meets the minimum required version for AWS CDK (typically v14.15.0+).
 
-If you're using an unsupported platform, please open an issue on our GitHub repository.
+> **Note:** Node.js version compatibility warnings are silenced by default. If you want to see these warnings:
+> ```bash
+> cdk --show-node-warnings [commands...]
+> ```
 
-## Directory Structure
-
-The package has the following structure:
-
-```
-aws_cdk_wrapper/
-├── __init__.py           # Package initialization
-├── cli.py                # Command-line interface implementation
-├── installer.py          # Node.js and CDK installation logic
-├── post_install.py       # Post-installation script
-├── version.py            # Version information
-├── node_binaries/        # Platform-specific Node.js binaries
-│   ├── darwin/           # macOS binaries
-│   │   ├── arm64/        # Apple Silicon
-│   │   └── x86_64/       # Intel
-│   ├── linux/            # Linux binaries
-│   │   ├── aarch64/      # ARM64
-│   │   └── x86_64/       # x86_64
-│   └── windows/          # Windows binaries
-│       └── x86_64/       # x86_64
-└── node_modules/         # CDK JavaScript code
-    └── aws-cdk/          # AWS CDK npm package
-```
-
-## Testing the Implementation
-
-The package includes a comprehensive test suite to ensure functionality across different platforms. You can run tests using the included Makefile:
+If you want to force using your system Node.js regardless of version:
 
 ```bash
-# Install development dependencies
-pip install -e ".[dev]"
-
-# Run basic tests (fast tests only)
-make test
-
-# Run all tests including slow tests that create real CDK apps
-make test-slow
-
-# Test local installation in a new virtual environment
-make test-local
+cdk --use-system-node [commands...]
 ```
 
-### Manual Testing
+### Using Bun (if explicitly enabled)
 
-You can also manually test the package:
+Bun is a fast JavaScript runtime with 100% Node.js compatibility. Enable it with:
 
 ```bash
-# Install in development mode
-pip install -e .
-
-# Try importing the package
-python -c "import aws_cdk_wrapper; print(aws_cdk_wrapper.__version__)"
-
-# Test the CDK CLI
-cdk --version
-
-# Create and test a CDK app
-mkdir test-app && cd test-app
-cdk init app --language=python
-cdk synth
+cdk --use-bun [commands...]
 ```
 
-## Troubleshooting
+Requirements for using Bun:
+- Bun v1.1.0 or higher must be installed on your system
+- The wrapper will verify that Bun's reported Node.js version is compatible with CDK requirements
 
-### Permission Issues
+### Using bundled Node.js (fallback)
 
-If you encounter permission issues when running cdk commands, try:
-- Using a virtual environment
-- Using the `--user` flag with pip install
-- Running with elevated privileges if appropriate for your environment
+If no compatible system Node.js is found, the wrapper will use its bundled Node.js runtime, which is downloaded during installation. This is guaranteed to be a version that's compatible with AWS CDK.
 
-### Extracting Binaries
+### Forcing download of bundled Node.js
 
-If you encounter issues with binary extraction during installation:
-- Ensure you have sufficient disk space
-- Check write permissions in your Python packages directory
-- Try reinstalling the package
+```bash
+cdk --force-download-node [commands...]
+```
 
-### Network Connectivity
-
-If you encounter network-related issues:
-- Try running in offline mode (`cdk --offline`) if you've previously installed
-- Check your network connectivity and proxy settings
-- If behind a corporate proxy, set the appropriate HTTP_PROXY environment variables
+This forces downloading and using the bundled Node.js even if a compatible system Node.js is available.
 
 ## Environment Variables
 
@@ -178,6 +125,9 @@ The package respects the following environment variables:
 - `AWS_CDK_DEBUG`: Set to "1" for verbose debug output
 - `HTTP_PROXY` / `HTTPS_PROXY`: Used for network connections if set
 - All standard AWS CDK environment variables
+- `AWS_CDK_BIN_USE_SYSTEM_NODE=1`: Use system Node.js if available
+- `AWS_CDK_BIN_USE_BUN=1`: Use Bun as the JavaScript runtime
+- `AWS_CDK_BIN_FORCE_DOWNLOAD_NODE=1`: Force download of bundled Node.js
 
 ## License Information
 
