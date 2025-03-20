@@ -251,7 +251,7 @@ if __name__ == "__main__":
         description="Python wrapper for AWS CDK CLI with bundled Node.js runtime",
         long_description=read_long_description(),
         long_description_content_type="text/markdown",
-        url="https://github.com/rvben/aws-cdk-wrapper",
+        url="https://github.com/rvben/aws-cdk-cli-py",
         packages=find_packages(),
         package_data={
             "aws_cdk_cli": [

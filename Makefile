@@ -50,5 +50,5 @@ verify: $(VENV)
 
 verify-testpypi: $(VENV)
 	rm -rf .venv; uv venv; \
-	uv pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple aws-cdk-wrapper==$(CDK_VERSION) && \
+	uv pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple aws-cdk-cli==$(CDK_VERSION) && \
 	./.venv/bin/cdk --version --verbose
