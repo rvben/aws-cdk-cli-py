@@ -33,7 +33,7 @@ def get_package_dir():
 
 
 def get_node_path():
-    """Get the path to the bundled Node.js executable."""
+    """Get the path to the downloaded Node.js executable."""
     package_dir = get_package_dir()
     node_binaries_dir = os.path.join(package_dir, "node_binaries", SYSTEM, MACHINE)
 
@@ -113,19 +113,21 @@ def get_cdk_path():
 
 def ensure_node_installed():
     """
-    Ensure that a suitable JavaScript runtime (Node.js or Bun) is installed and available.
-
-    Returns the path to the JavaScript runtime if available, or None if not.
-
-    Environment variables:
-    - AWS_CDK_CLI_USE_SYSTEM_NODE: If set, prefer using system Node.js
-    - AWS_CDK_CLI_USE_BUN: If set, try to use Bun as the JavaScript runtime
-    - AWS_CDK_CLI_USE_BUNDLED_NODE: If set, use bundled Node.js rather than system Node.js
-
-    Default behavior is to use system Node.js if available and compatible, then fall back to bundled Node.js.
+    Ensure that Node.js is installed and available.
+    
+    This function tries to find a JavaScript runtime in the following order:
+    1. System Node.js (if USE_SYSTEM_NODE is specified)
+    2. Bun (if USE_BUN is specified)
+    3. Downloaded Node.js (downloaded if not present)
+    
+    Environment variables that control behavior:
+    - AWS_CDK_CLI_USE_SYSTEM_NODE: If set, use system Node.js rather than downloaded Node.js
+    - AWS_CDK_CLI_USE_BUN: If set, use Bun runtime instead of Node.js
+    
+    Default behavior is to use system Node.js if available and compatible, then fall back to downloaded Node.js.
     """
     # We always use the installer's setup_nodejs function to handle runtime selection
-    # It will prioritize system Node.js, then bundled Node.js by default
+    # It will prioritize system Node.js, then downloaded Node.js by default
     from .installer import setup_nodejs
 
     logger.debug("Setting up JavaScript runtime")

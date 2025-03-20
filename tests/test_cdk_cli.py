@@ -145,7 +145,7 @@ def test_import():
 
 
 def test_node_detection():
-    """Test that the package correctly detects the bundled Node.js."""
+    """Test that the package correctly detects the downloaded Node.js."""
     assert hasattr(aws_cdk_cli, "NODE_BIN_PATH")
 
     # Verify the path exists (with better error handling)
@@ -169,14 +169,14 @@ def test_node_detection():
         assert "v" in result.stdout, (
             f"Unexpected Node.js version output: {result.stdout}"
         )
-        print(f"Bundled Node.js version: {result.stdout.strip()}")
+        print(f"Downloaded Node.js version: {result.stdout.strip()}")
     else:
         # Just report Windows path for debugging
         print(f"Windows Node.js binary path: {node_path}")
 
 
 def test_cdk_detection():
-    """Test that the package correctly detects the bundled CDK CLI."""
+    """Test that the package correctly detects the downloaded CDK CLI."""
     assert hasattr(aws_cdk_cli, "CDK_SCRIPT_PATH")
     assert Path(aws_cdk_cli.CDK_SCRIPT_PATH).exists(), (
         f"CDK script not found at {aws_cdk_cli.CDK_SCRIPT_PATH}"

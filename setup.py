@@ -248,7 +248,7 @@ if __name__ == "__main__":
     setup(
         name="aws-cdk-cli",
         version=cdk_version,
-        description="Python wrapper for AWS CDK CLI with bundled Node.js runtime",
+        description="Python wrapper for AWS CDK CLI with smart Node.js runtime management",
         long_description=read_long_description(),
         long_description_content_type="text/markdown",
         url="https://github.com/rvben/aws-cdk-cli-py",

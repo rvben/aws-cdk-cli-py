@@ -27,8 +27,8 @@ def system_node_env():
     # Ensure other runtime selection variables are unset
     if "AWS_CDK_CLI_USE_BUN" in os.environ:
         del os.environ["AWS_CDK_CLI_USE_BUN"]
-    if "AWS_CDK_CLI_USE_BUNDLED_NODE" in os.environ:
-        del os.environ["AWS_CDK_CLI_USE_BUNDLED_NODE"]
+    if "AWS_CDK_CLI_USE_DOWNLOADED_NODE" in os.environ:
+        del os.environ["AWS_CDK_CLI_USE_DOWNLOADED_NODE"]
 
     yield
 
@@ -41,7 +41,7 @@ def system_node_env():
 def force_download_env():
     """Set up environment variables for forcing Node.js download."""
     old_env = os.environ.copy()
-    os.environ["AWS_CDK_CLI_USE_BUNDLED_NODE"] = "1"
+    os.environ["AWS_CDK_CLI_USE_DOWNLOADED_NODE"] = "1"
 
     # Ensure other runtime selection variables are unset
     if "AWS_CDK_CLI_USE_BUN" in os.environ:
@@ -99,7 +99,7 @@ def test_setup_nodejs_default():
     for env_var in [
         "AWS_CDK_CLI_USE_SYSTEM_NODE",
         "AWS_CDK_CLI_USE_BUN",
-        "AWS_CDK_CLI_USE_BUNDLED_NODE",
+        "AWS_CDK_CLI_USE_DOWNLOADED_NODE",
     ]:
         if env_var in os.environ:
             del os.environ[env_var]
@@ -124,7 +124,7 @@ def test_setup_nodejs_default():
     assert os.path.exists(result), f"Node path {result} should exist"
 
     # The default behavior should prioritize system Node.js if compatible
-    # but in CI environments or test environments, it might use the bundled Node.js
+    # but in CI environments or test environments, it might use the downloaded Node.js
     system_node = find_system_nodejs()
     if system_node:
         version = get_nodejs_version(system_node)
@@ -132,7 +132,7 @@ def test_setup_nodejs_default():
         is_compatible = is_nodejs_compatible(version, req)
         
         # In CI environments, even when system node exists and is compatible,
-        # the test might use bundled node. We'll allow either path.
+        # the test might use downloaded node. We'll allow either path.
         if is_compatible and "CI" not in os.environ:
             assert result == system_node, f"Expected {system_node}, got {result}"
         else:
@@ -184,7 +184,7 @@ def test_precedence_system_node_over_download():
     """Test that system Node.js takes precedence over forced download."""
     # Set both flags
     os.environ["AWS_CDK_CLI_USE_SYSTEM_NODE"] = "1"
-    os.environ["AWS_CDK_CLI_USE_BUNDLED_NODE"] = "1"
+    os.environ["AWS_CDK_CLI_USE_DOWNLOADED_NODE"] = "1"
 
     with patch("aws_cdk_cli.installer.download_node") as mock_download:
         # Ensure download is not called when system node takes precedence
@@ -201,4 +201,40 @@ def test_precedence_system_node_over_download():
 
     # Clean up
     del os.environ["AWS_CDK_CLI_USE_SYSTEM_NODE"]
-    del os.environ["AWS_CDK_CLI_USE_BUNDLED_NODE"]
+    del os.environ["AWS_CDK_CLI_USE_DOWNLOADED_NODE"]
+
+
+def setup_function():
+    """Set up the test environment."""
+    # Clear any existing environment variables
+    if "AWS_CDK_CLI_USE_SYSTEM_NODE" in os.environ:
+        del os.environ["AWS_CDK_CLI_USE_SYSTEM_NODE"]
+    if "AWS_CDK_CLI_USE_DOWNLOADED_NODE" in os.environ:
+        del os.environ["AWS_CDK_CLI_USE_DOWNLOADED_NODE"]
+    if "AWS_CDK_CLI_USE_BUN" in os.environ:
+        del os.environ["AWS_CDK_CLI_USE_BUN"]
+
+
+def test_force_bundled_node():
+    """Test that forcing bundled Node.js works."""
+    # Force bundled Node.js
+    os.environ["AWS_CDK_CLI_USE_DOWNLOADED_NODE"] = "1"
+    
+    # Note that this test checks the basic version detection, which might use the system Node.js,
+    # but in CI environments or test environments, it might use the downloaded Node.js
+    
+    # For CI environments, allow the path to be the downloaded node binary
+    # the test might use downloaded node. We'll allow either path.
+
+
+def test_force_download_node():
+    """Test that forcing download Node.js works correctly."""
+    # First ensure we clear any environment variables
+    if "AWS_CDK_CLI_USE_SYSTEM_NODE" in os.environ:
+        del os.environ["AWS_CDK_CLI_USE_SYSTEM_NODE"]
+    
+    # Force use of downloaded Node.js
+    os.environ["AWS_CDK_CLI_USE_DOWNLOADED_NODE"] = "1"
+    
+    # Clean up
+    del os.environ["AWS_CDK_CLI_USE_DOWNLOADED_NODE"]

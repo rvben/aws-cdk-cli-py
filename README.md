@@ -1,4 +1,4 @@
-# AWS CDK Python Wrapper
+# AWS CDK CLI - Python Wrapper
 
 A Python package that provides a wrapper around the AWS CDK CLI tool, allowing Python developers to install and use AWS CDK via pip/uv instead of npm. This package bundles the AWS CDK code and either uses your system's Node.js installation or downloads a platform-specific Node.js runtime during installation.
 
@@ -41,14 +41,14 @@ Note: During installation, the package will download the appropriate Node.js bin
 
 ## Features
 
-- **No npm dependency**: Eliminates the need for npm while still requiring Node.js (either system or bundled)
+- **No npm dependency**: Eliminates the need for npm while still requiring Node.js (either system or downloaded)
 - **Platform support**: Downloads appropriate Node.js binaries for Windows, macOS, and Linux when needed
 - **Automatic updates**: Stays in sync with official AWS CDK releases
 - **Seamless integration**: Use the same CDK commands you're familiar with
 - **Offline caching**: Downloaded binaries are cached for offline usage
 - **License compliance**: Includes all necessary license texts
 - **Optimized size**: Only downloads the binaries needed for your platform
-- **Flexible runtime options**: Can use system Node.js, bundled Node.js, or Bun runtime
+- **Flexible runtime options**: Can use system Node.js, downloaded Node.js, or Bun runtime
 - **Compatible with Windows, macOS, and Linux**
 - **Supports both x86_64 and ARM64 architectures**
 
@@ -107,17 +107,17 @@ Requirements for using Bun:
 - Bun v1.1.0 or higher must be installed on your system
 - The wrapper will verify that Bun's reported Node.js version is compatible with CDK requirements
 
-### Using bundled Node.js (fallback)
+### Using downloaded Node.js (fallback)
 
-If no compatible system Node.js is found, the wrapper will use its bundled Node.js runtime, which is downloaded during installation. This is guaranteed to be a version that's compatible with AWS CDK.
+If no compatible system Node.js is found, the wrapper will download and use the Node.js runtime for your platform during installation. This is guaranteed to be a version that's compatible with AWS CDK.
 
-### Using bundled Node.js explicitly
+### Using downloaded Node.js explicitly
 
 ```bash
-cdk --use-bundled-node [commands...]
+cdk --use-downloaded-node [commands...]
 ```
 
-This explicitly uses the bundled Node.js even if a compatible system Node.js is available.
+This explicitly uses the downloaded Node.js even if a compatible system Node.js is available.
 
 ## Environment Variables
 
@@ -126,7 +126,7 @@ The package respects the following environment variables:
 - `AWS_CDK_DEBUG`: Set to "1" for verbose debug output
 - `AWS_CDK_CLI_USE_SYSTEM_NODE=1`: Use system Node.js if available
 - `AWS_CDK_CLI_USE_BUN=1`: Use Bun as the JavaScript runtime
-- `AWS_CDK_CLI_USE_BUNDLED_NODE=1`: Use bundled Node.js instead of system Node.js
+- `AWS_CDK_CLI_USE_DOWNLOADED_NODE=1`: Use downloaded Node.js instead of system Node.js
 
 ## License Information
 

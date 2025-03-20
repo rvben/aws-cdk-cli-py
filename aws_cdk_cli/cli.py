@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Command-line interface for AWS CDK Python wrapper with bundled Node.js.
+Command-line interface for AWS CDK Python wrapper with Node.js runtime support.
 """
 
 import os
@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 def run_cdk_command(args, capture_output=False, env=None):
     """
-    Run a CDK command with the given arguments using bundled Node.js.
+    Run a CDK command with the given arguments using downloaded Node.js.
 
     Args:
         args: List of command-line arguments to pass to CDK.
@@ -110,14 +110,14 @@ def show_versions(verbose=False):
     # Show our wrapper version
     print(f"AWS CDK Python Wrapper v{__version__}")
 
-    # Show bundled CDK version
+    # Show installed versions
     cdk_version = get_cdk_version()
     if cdk_version:
         print(f"AWS CDK: v{cdk_version}")
     else:
         print("AWS CDK: not installed")
 
-    # Show bundled Node.js version
+    # Show Node.js version
     node_version = get_node_version()
     if node_version:
         print(f"Node.js: v{node_version}")
@@ -176,9 +176,9 @@ def main():
         help="Use Bun as the JavaScript runtime (requires Bun v1.1.0+)",
     )
     runtime_control.add_argument(
-        "--use-bundled-node",
+        "--use-downloaded-node",
         action="store_true",
-        help="Use the bundled Node.js instead of system Node.js",
+        help="Use the downloaded Node.js instead of system Node.js",
     )
     runtime_control.add_argument(
         "--show-node-warnings",
@@ -209,8 +209,8 @@ def main():
     # Handle --wrapper-version
     if args.wrapper_version:
         print(f"AWS CDK Python Wrapper v{version.__version__}")
-        print(f"Bundled CDK v{version.__cdk_version__}")
-        print(f"Bundled Node.js v{version.__node_version__}")
+        print(f"Downloaded CDK v{version.__cdk_version__}")
+        print(f"Downloaded Node.js v{version.__node_version__}")
         return 0
 
     # If runtime control options are provided, set them as environment vars
@@ -223,23 +223,23 @@ def main():
         os.environ["AWS_CDK_CLI_USE_BUN"] = "1"
         logger.debug("Using Bun as JavaScript runtime if available")
 
-    if args.use_bundled_node:
-        os.environ["AWS_CDK_CLI_USE_BUNDLED_NODE"] = "1"
-        logger.debug("Using bundled Node.js")
+    if args.use_downloaded_node:
+        os.environ["AWS_CDK_CLI_USE_DOWNLOADED_NODE"] = "1"
+        logger.debug("Using downloaded Node.js")
 
     if args.show_node_warnings:
         os.environ["AWS_CDK_CLI_SHOW_NODE_WARNINGS"] = "1"
         logger.debug("Showing Node.js version compatibility warnings")
 
     # Check for incompatible combinations
-    if args.use_system_node and args.use_bundled_node:
+    if args.use_system_node and args.use_downloaded_node:
         logger.warning(
-            "Both --use-system-node and --use-bundled-node specified. Using system Node.js takes precedence."
+            "Both --use-system-node and --use-downloaded-node specified. Using system Node.js takes precedence."
         )
 
-    if args.use_bun and args.use_bundled_node:
+    if args.use_bun and args.use_downloaded_node:
         logger.warning(
-            "Both --use-bun and --use-bundled-node specified. Bun will be tried first."
+            "Both --use-bun and --use-downloaded-node specified. Bun will be tried first."
         )
 
     if args.use_bun and args.use_system_node:

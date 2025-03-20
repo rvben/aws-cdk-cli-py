@@ -97,7 +97,7 @@ def get_latest_cdk_version():
         return version
     except (subprocess.SubprocessError, FileNotFoundError):
         try:
-            # Fallback to using the bundled Node.js if available
+            # Fallback to using the downloaded Node.js if available
             if is_node_installed():
                 version = subprocess.check_output(
                     [
@@ -552,12 +552,12 @@ def setup_nodejs():
     Order of preference:
     1. Bun (if AWS_CDK_CLI_USE_BUN is set)
     2. System Node.js (if compatible with CDK requirements or AWS_CDK_CLI_USE_SYSTEM_NODE is set)
-    3. Bundled Node.js (downloaded if not present)
+    3. Downloaded Node.js (downloaded if not present)
 
     Environment variables:
     - AWS_CDK_CLI_USE_BUN: If set, try to use Bun as the JavaScript runtime
-    - AWS_CDK_CLI_USE_SYSTEM_NODE: If set, prefer using system Node.js over bundled
-    - AWS_CDK_CLI_USE_BUNDLED_NODE: If set, use bundled Node.js rather than system Node.js
+    - AWS_CDK_CLI_USE_SYSTEM_NODE: If set, prefer using system Node.js over downloaded
+    - AWS_CDK_CLI_USE_DOWNLOADED_NODE: If set, use downloaded Node.js rather than system Node.js
     - AWS_CDK_CLI_SHOW_NODE_WARNINGS: If set, show Node.js version compatibility warnings
 
     Returns:
@@ -568,10 +568,10 @@ def setup_nodejs():
     # Get CDK Node.js requirements
     node_req = get_cdk_node_requirements()
 
-    # Check if we should just download Node.js directly
-    force_download = os.environ.get("AWS_CDK_CLI_USE_BUNDLED_NODE") is not None
+    # Use bundled/downloaded Node.js if explicitly requested
+    force_download = os.environ.get("AWS_CDK_CLI_USE_DOWNLOADED_NODE") is not None
     if force_download:
-        logger.info("Using bundled Node.js")
+        logger.info("Using downloaded Node.js")
         success, result = download_node()
         if success:
             logger.debug(f"Successfully downloaded Node.js to {NODE_BIN_PATH}")
@@ -643,13 +643,13 @@ def setup_nodejs():
         else:
             logger.debug("No system Node.js found")
 
-    # Finally, check if we already have a bundled Node.js
+    # Finally, check if we already have a downloaded Node.js
     if is_node_installed():
-        logger.debug(f"Using bundled Node.js at {NODE_BIN_PATH}")
+        logger.debug(f"Using downloaded Node.js at {NODE_BIN_PATH}")
         return True, NODE_BIN_PATH
 
     # If no suitable runtime found yet, download Node.js
-    logger.info("No suitable JavaScript runtime found. Downloading bundled Node.js...")
+    logger.info("No suitable JavaScript runtime found. Downloading Node.js...")
     success, result = download_node()
     if success:
         logger.debug(f"Successfully downloaded Node.js to {NODE_BIN_PATH}")

@@ -1,8 +1,8 @@
 """
-Post-installation script for AWS CDK Python wrapper with bundled Node.js.
+Post-installation script for AWS CDK Python wrapper.
 
 This script is executed after the Python package is installed.
-It extracts the bundled Node.js binaries and installs the AWS CDK.
+It downloads Node.js binaries for the current platform if needed.
 """
 
 import os

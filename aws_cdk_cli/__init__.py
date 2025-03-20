@@ -4,8 +4,8 @@ AWS CDK CLI - A Python wrapper for AWS CDK CLI with smart Node.js runtime manage
 This package provides a Python wrapper around the AWS CDK CLI tool (normally installed via npm),
 allowing Python developers to install and use the AWS CDK via pip/uv without requiring npm.
 
-It bundles a minimal Node.js distribution and the AWS CDK JavaScript code, eliminating
-the need for a separate npm/Node.js installation.
+It includes the AWS CDK JavaScript code and downloads a compatible Node.js runtime when needed,
+eliminating the need for a separate npm/Node.js installation.
 
 License:
     This package contains both:
