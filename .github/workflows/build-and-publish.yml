@@ -118,16 +118,16 @@ jobs:
           
       - name: Publish to Test PyPI with make
         env:
-          TWINE_USERNAME: ${{ secrets.TEST_PYPI_USERNAME }}
-          TWINE_PASSWORD: ${{ secrets.TEST_PYPI_PASSWORD }}
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.TEST_PYPI_API_TOKEN }}
         run: |
           make publish-test
           
       - name: Publish to PyPI with make
         if: success()  # Only run if all previous steps succeeded
         env:
-          TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
-          TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
           CDK_VERSION: ${{ steps.get_version.outputs.version }}
         run: |
           make publish-prod 
