@@ -68,9 +68,9 @@ jobs:
           NEW_VERSION="${{ steps.check-version.outputs.latest_version }}"
           echo "Creating tag v${NEW_VERSION}"
           
-          # Create and push the tag
+          # Create and push the tag with PAT to trigger other workflows
           git tag -a "v${NEW_VERSION}" -m "AWS CDK version ${NEW_VERSION}"
-          git push origin "v${NEW_VERSION}"
+          git push https://${{ secrets.GH_PAT }}@github.com/${GITHUB_REPOSITORY}.git "v${NEW_VERSION}"
       
       - name: Create Release Info
         if: steps.check-version.outputs.has_new_version == 'true'
