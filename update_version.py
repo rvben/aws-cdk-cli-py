@@ -23,7 +23,7 @@ __build_timestamp__ = "{datetime.datetime.now().timestamp()}"
 __build_commit__ = None
 
 # Bundled software versions
-__node_version__ = "18.16.0"  # Version of Node.js downloaded during installation
+__node_version__ = "22.14.0"  # Version of Node.js downloaded during installation
 __cdk_version__ = __version__  # Version of AWS CDK bundled (same as package version)
 
 # Component licenses

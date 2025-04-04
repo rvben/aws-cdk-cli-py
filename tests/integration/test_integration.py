@@ -120,7 +120,7 @@ def test_node_download(clean_environment):
         bin_dir = node_binaries_dir / "bin"
         bin_dir.mkdir(parents=True, exist_ok=True)
         bin_path = bin_dir / "node"
-        node_content = "#!/bin/sh\necho v18.16.0\n"
+        node_content = "#!/bin/sh\necho v22.14.0\n"
     
         # Create a proper executable node script
         with open(bin_path, "w") as f:
@@ -253,12 +253,12 @@ app.synth()
     
     if system == "windows":
         node_bin_path = node_binaries_dir / "node.exe"
-        node_content = "@echo off\necho v18.16.0\n"
+        node_content = "@echo off\necho v22.14.0\n"
     else:
         bin_dir = node_binaries_dir / "bin"
         bin_dir.mkdir(parents=True, exist_ok=True)
         node_bin_path = bin_dir / "node"
-        node_content = "#!/bin/sh\necho v18.16.0\n"
+        node_content = "#!/bin/sh\necho v22.14.0\n"
     
     # Create a proper executable node script
     with open(node_bin_path, "w") as f:

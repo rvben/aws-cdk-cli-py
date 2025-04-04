@@ -15,7 +15,7 @@ from setuptools.command.build_py import build_py
 from setuptools.command.sdist import sdist
 
 # Constants
-NODE_VERSION = "18.16.0"  # LTS version
+NODE_VERSION = "22.14.0"  # LTS version
 NODE_BINARIES_DIR = os.path.join("aws_cdk_cli", "node_binaries")
 
 # Platform detection

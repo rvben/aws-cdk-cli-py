@@ -46,7 +46,7 @@ def setup_test_environment():
             node_path = binary_dir / "node.exe"
             if not node_path.exists():
                 with open(node_path, "w") as f:
-                    f.write("@echo off\necho v18.16.0\n")
+                    f.write("@echo off\necho v22.14.0\n")
                 # Make it executable (though Windows doesn't use file permissions the same way)
                 # This is just for consistency
                 try:
@@ -62,7 +62,7 @@ def setup_test_environment():
             node_path = bin_dir / "node"
             if not node_path.exists():
                 with open(node_path, "w") as f:
-                    f.write('#!/bin/sh\necho "v18.16.0"\n')
+                    f.write('#!/bin/sh\necho "v22.14.0"\n')
                 try:
                     node_path.chmod(0o755)
                     # Double-check permissions were set correctly

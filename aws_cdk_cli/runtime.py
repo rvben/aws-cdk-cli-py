@@ -13,7 +13,7 @@ logging.basicConfig(
 logger = logging.getLogger("aws-cdk-runtime")
 
 # Constants
-NODE_VERSION = "18.16.0"  # LTS version
+NODE_VERSION = "22.14.0"  # LTS version
 CDK_PACKAGE_NAME = "aws-cdk"
 
 # Platform detection

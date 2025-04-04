@@ -19,7 +19,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 # Constants
-NODE_VERSION = "18.16.0"  # LTS version
+NODE_VERSION = "22.14.0"  # LTS version
 NODE_BINARIES_DIR = os.path.join(os.path.dirname(__file__), "node_binaries")
 
 # Platform detection (duplicated from aws_cdk.__init__)

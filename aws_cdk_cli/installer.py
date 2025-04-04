@@ -34,7 +34,7 @@ from aws_cdk_cli import (
 logger = logging.getLogger(__name__)
 
 # Node.js version to use
-NODE_VERSION = "18.16.0"  # LTS version
+NODE_VERSION = "22.14.0"  # LTS version
 
 # Minimum Bun version required for --eval support
 MIN_BUN_VERSION = "1.1.0"
@@ -57,15 +57,15 @@ NODE_URLS = {
 # Known checksums for Node.js binaries - for verification
 NODE_CHECKSUMS = {
     "darwin": {
-        "x86_64": "6659dab5035e3e0fba29c4f8eb1e0367b38823fe8901bd9aa633f5dbb7863148",
-        "arm64": "82c7bb4869419ce7338669e6739a786dfc7e72f276ffbed663f85ffc905dcdb4",
+        "x86_64": "e5fa00fd1be09b03c778d1f76ae93502216a618b8ff0a254b076844bd7d555af",
+        "arm64": "a20fb83c8d569dd1294a3b604e3696fabfe1f3169c562b7e962d6bd1f291e09b",
     },
     "linux": {
-        "x86_64": "fc83046a93d2189d919005a348db3b2372b598a145d84eb9781a3a4b0f032e95",
-        "aarch64": "b72f6711d010fffe3ccccdb1f1e152046235a2b5d6aac252e74f1922ecdad1e4",
+        "x86_64": "2b4e1d21eef715d126b99b05c089c7ae518c8ae60f2b2607e68484d3bb1eb083",
+        "aarch64": "5693ca1e9486868b9c5d8ba0237d851b97b5c48c4e24d93ad04ee8d7914826b4",
     },
     "windows": {
-        "x86_64": "f7ddcc40a4f9602acf22143000be501e19a3f1494c9f487316124c0c3f30a57e",
+        "x86_64": "fe1a592a8bf0ef555d59cdcea29fd90338e7e5dc677bcc8efafe0ffced0a7aee",
     },
 }
 
@@ -291,7 +291,7 @@ def download_node():
 
             # For Unix systems, check if the binary is in the expected tarball directory structure
             if SYSTEM != "windows":
-                # Node.js tarballs contain a directory like "node-v18.16.0-linux-x64"
+                # Node.js tarballs contain a directory like "node-v22.14.0-linux-x64"
                 expected_dir_name = f"node-v{NODE_VERSION}-{SYSTEM}-{'x64' if MACHINE == 'x86_64' else 'arm64'}"
                 expected_dir_path = os.path.join(NODE_PLATFORM_DIR, expected_dir_name)
                 expected_bin_path = os.path.join(expected_dir_path, "bin", "node")

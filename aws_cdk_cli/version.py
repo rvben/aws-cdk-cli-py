@@ -12,7 +12,7 @@ __build_timestamp__ = "0.0"
 __build_commit__ = None
 
 # Bundled software versions
-__node_version__ = "18.16.0"  # Version of Node.js bundled with this package
+__node_version__ = "22.14.0"  # Version of Node.js downloaded during installation
 __cdk_version__ = __version__  # Version of AWS CDK bundled (same as package version)
 
 # Component licenses
