@@ -106,15 +106,19 @@ def test_setup_nodejs_default():
 
     # On Windows, we need to mock the download function to avoid issues
     if platform.system().lower() == "windows":
-        with unittest.mock.patch("aws_cdk_cli.installer.download_node") as mock_download:
+        with unittest.mock.patch(
+            "aws_cdk_cli.installer.download_node"
+        ) as mock_download:
             # Configure mock to return a successful result
             bin_path = os.path.join("mock", "path", "to", "node.exe")
             mock_download.return_value = (True, bin_path)
-            
+
             # Test default behavior with mock
             success, result = setup_nodejs()
             assert success, "setup_nodejs should succeed"
-            assert os.path.basename(result).lower() in ("node", "node.exe"), f"Expected node binary, got {result}"
+            assert os.path.basename(result).lower() in ("node", "node.exe"), (
+                f"Expected node binary, got {result}"
+            )
             return
 
     # For non-Windows platforms, continue with the original test
@@ -130,14 +134,16 @@ def test_setup_nodejs_default():
         version = get_nodejs_version(system_node)
         req = get_cdk_node_requirements() or ">= 14.15.0"
         is_compatible = is_nodejs_compatible(version, req)
-        
+
         # In CI environments, even when system node exists and is compatible,
         # the test might use downloaded node. We'll allow either path.
         if is_compatible and "CI" not in os.environ:
             assert result == system_node, f"Expected {system_node}, got {result}"
         else:
             # Just check it's a valid path ending with 'node' or 'node.exe'
-            assert os.path.basename(result) in ("node", "node.exe"), f"Expected node binary, got {result}"
+            assert os.path.basename(result) in ("node", "node.exe"), (
+                f"Expected node binary, got {result}"
+            )
 
 
 @pytest.mark.integration
@@ -161,7 +167,7 @@ def test_setup_nodejs_with_force_download(mock_download, force_download_env):
         mock_path = "\\mock\\path\\to\\node.exe"
     else:
         mock_path = "/mock/path/to/node"
-        
+
     mock_download.return_value = (True, mock_path)
 
     success, result = setup_nodejs()
@@ -174,9 +180,13 @@ def test_setup_nodejs_with_force_download(mock_download, force_download_env):
     # If the mock was called, verify the path is appropriate for the platform
     if mock_download.called:
         if system == "windows":
-            assert ".exe" in result.lower(), f"Windows node binary path should end with .exe, got: {result}"
+            assert ".exe" in result.lower(), (
+                f"Windows node binary path should end with .exe, got: {result}"
+            )
         else:
-            assert "/node" in result, f"Unix node binary path should contain '/node', got: {result}"
+            assert "/node" in result, (
+                f"Unix node binary path should contain '/node', got: {result}"
+            )
 
 
 @pytest.mark.integration
@@ -219,10 +229,10 @@ def test_force_bundled_node():
     """Test that forcing bundled Node.js works."""
     # Force bundled Node.js
     os.environ["AWS_CDK_CLI_USE_DOWNLOADED_NODE"] = "1"
-    
+
     # Note that this test checks the basic version detection, which might use the system Node.js,
     # but in CI environments or test environments, it might use the downloaded Node.js
-    
+
     # For CI environments, allow the path to be the downloaded node binary
     # the test might use downloaded node. We'll allow either path.
 
@@ -232,9 +242,9 @@ def test_force_download_node():
     # First ensure we clear any environment variables
     if "AWS_CDK_CLI_USE_SYSTEM_NODE" in os.environ:
         del os.environ["AWS_CDK_CLI_USE_SYSTEM_NODE"]
-    
+
     # Force use of downloaded Node.js
     os.environ["AWS_CDK_CLI_USE_DOWNLOADED_NODE"] = "1"
-    
+
     # Clean up
     del os.environ["AWS_CDK_CLI_USE_DOWNLOADED_NODE"]

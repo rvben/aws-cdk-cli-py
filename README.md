@@ -52,6 +52,28 @@ Note: During installation, the package will download the appropriate Node.js bin
 - **Compatible with Windows, macOS, and Linux**
 - **Supports both x86_64 and ARM64 architectures**
 
+## Additional Features
+
+### Node.js Access in Virtual Environments
+
+When you install AWS CDK CLI in a Python virtual environment, the package automatically creates a `node` symlink in your virtual environment's `bin` directory. This allows you to run the `node` command directly without requiring Node.js to be installed on your system.
+
+For example:
+
+```bash
+# Activate your virtual environment
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Now you can use the node command
+node --version
+```
+
+If for some reason the symlink wasn't created, you can create it manually by running:
+
+```bash
+cdk --create-node-symlink
+```
+
 ## Usage
 
 After installation, you can use the `cdk` command just as you would with the npm version:

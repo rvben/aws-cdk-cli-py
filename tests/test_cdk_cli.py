@@ -51,7 +51,7 @@ def setup_test_environment():
                 # This is just for consistency
                 try:
                     os.chmod(node_path, 0o755)
-                except:
+                except (OSError, PermissionError):
                     pass
         else:
             # Unix-based systems
@@ -66,9 +66,13 @@ def setup_test_environment():
                 try:
                     node_path.chmod(0o755)
                     # Double-check permissions were set correctly
-                    assert os.access(node_path, os.X_OK), f"Failed to make {node_path} executable"
+                    assert os.access(node_path, os.X_OK), (
+                        f"Failed to make {node_path} executable"
+                    )
                 except Exception as e:
-                    print(f"Warning: Could not set executable permissions on {node_path}: {e}")
+                    print(
+                        f"Warning: Could not set executable permissions on {node_path}: {e}"
+                    )
 
         # Create CDK script directory and mock script
         cdk_dir = Path(aws_cdk_cli.__file__).parent / "node_modules" / "aws-cdk" / "bin"
@@ -81,14 +85,20 @@ def setup_test_environment():
                     f.write("@echo off\necho AWS CDK v2.99.0\n")
                 else:
                     # Create a JavaScript file since it will be executed by Node.js
-                    f.write('#!/usr/bin/env node\nconsole.log("AWS CDK v2.99.0");\nprocess.exit(0);\n')
+                    f.write(
+                        '#!/usr/bin/env node\nconsole.log("AWS CDK v2.99.0");\nprocess.exit(0);\n'
+                    )
             try:
                 cdk_path.chmod(0o755)
                 if system != "windows":
                     # Double-check permissions were set correctly
-                    assert os.access(cdk_path, os.X_OK), f"Failed to make {cdk_path} executable"
+                    assert os.access(cdk_path, os.X_OK), (
+                        f"Failed to make {cdk_path} executable"
+                    )
             except Exception as e:
-                print(f"Warning: Could not set executable permissions on {cdk_path}: {e}")
+                print(
+                    f"Warning: Could not set executable permissions on {cdk_path}: {e}"
+                )
 
         # Create node_modules metadata to prevent download attempts
         metadata_dir = Path(aws_cdk_cli.__file__).parent / "node_modules" / "aws-cdk"
@@ -153,11 +163,13 @@ def test_node_detection():
     assert node_path.exists(), (
         f"Node binary not found at {node_path} (normalized: {node_path.resolve()})"
     )
-    
+
     # Ensure the binary is executable on non-Windows platforms
     if platform.system().lower() != "windows":
         os.chmod(node_path, 0o755)
-        assert os.access(str(node_path), os.X_OK), f"Node.js binary at {node_path} is not executable"
+        assert os.access(str(node_path), os.X_OK), (
+            f"Node.js binary at {node_path} is not executable"
+        )
 
     # On Windows, we shouldn't try to execute the mock binary directly
     if platform.system().lower() != "windows":
@@ -295,7 +307,7 @@ def test_runtime_detection(setup_mock_env):
         machine = "aarch64" if system == "linux" else "arm64"
 
     # Verify the created binary directory path
-    binary_dir = Path(aws_cdk_cli.__file__).parent / "node_binaries" / system / machine
+    Path(aws_cdk_cli.__file__).parent / "node_binaries" / system / machine
 
     # Check if paths are correctly detected
     print(f"NODE_BIN_PATH: {aws_cdk_cli.NODE_BIN_PATH}")

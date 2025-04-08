@@ -34,7 +34,7 @@ NODE_URLS = {
     },
     "linux": {
         "x86_64": f"https://nodejs.org/dist/v{NODE_VERSION}/node-v{NODE_VERSION}-linux-x64.tar.gz",
-        "aarch64": f"https://nodejs.org/dist/v{NODE_VERSION}/node-v{NODE_VERSION}-linux-arm64.tar.gz",
+        "arm64": f"https://nodejs.org/dist/v{NODE_VERSION}/node-v{NODE_VERSION}-linux-arm64.tar.gz",
     },
     "windows": {
         "x86_64": f"https://nodejs.org/dist/v{NODE_VERSION}/node-v{NODE_VERSION}-win-x64.zip",
@@ -45,7 +45,8 @@ NODE_URLS = {
 if MACHINE in ("amd64", "x86_64"):
     MACHINE = "x86_64"
 elif MACHINE in ("arm64", "aarch64"):
-    MACHINE = "aarch64" if SYSTEM == "linux" else "arm64"
+    # Always use arm64 for consistency with Node.js
+    MACHINE = "arm64"
 
 # Get package directory
 PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -65,7 +66,7 @@ def create_license_notices():
     try:
         # Try to import from aws_cdk_cli first, then fall back to local definitions
         try:
-            from aws_cdk_cli import PACKAGE_DIR, LICENSES
+            from aws_cdk_cli import LICENSES
         except ImportError:
             # Already defined above as fallback
             pass
@@ -251,7 +252,8 @@ def main():
 
         # Always download Node.js binaries since they are not bundled with the package
         logger.info("Downloading Node.js binaries for the current platform...")
-        if download_node():
+        download_success = download_node()
+        if download_success:
             logger.info("Node.js binaries downloaded successfully.")
         else:
             logger.warning(

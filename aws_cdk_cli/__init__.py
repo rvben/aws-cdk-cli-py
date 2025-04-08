@@ -16,13 +16,10 @@ License:
 """
 
 import os
-import sys
 import platform
 import subprocess
 import json
-from pathlib import Path
 import logging
-import importlib.resources
 from .version import __version__
 
 # Configure logging
@@ -53,7 +50,13 @@ def detect_platform():
     if machine in ("amd64", "x86_64", "x64"):
         machine = "x86_64"
     elif machine in ("arm64", "aarch64", "armv8"):
-        machine = "aarch64" if system == "linux" else "arm64"
+        # Important: Always use 'arm64' for consistency with Node.js distributions
+        # This is a critical change to standardize on one directory name
+        machine = "arm64"
+        
+        # Still store both names in environment for compatibility
+        os.environ["AWS_CDK_CLI_ARM64"] = "arm64"
+        os.environ["AWS_CDK_CLI_AARCH64"] = "aarch64"
 
     return system, machine
 

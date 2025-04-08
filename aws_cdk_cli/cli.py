@@ -10,11 +10,11 @@ import logging
 import argparse
 from . import runtime
 from . import version
+import shutil
 
 from aws_cdk_cli import (
     __version__,
     get_license_text,
-    is_cdk_installed,
     is_node_installed,
     get_cdk_version,
     get_node_version,
@@ -54,7 +54,6 @@ def run_cdk_command(args, capture_output=False, env=None):
             if capture_output:
                 return 1, "", error_msg
             return 1
-
 
     # Construct the command: node cdk.js [args]
     # The correct way to execute the CDK CLI is to run the script through Node.js
@@ -113,9 +112,9 @@ def show_versions(verbose=False):
     # Show installed versions
     cdk_version = get_cdk_version()
     if cdk_version:
-        print(f"AWS CDK: v{cdk_version}")
+        print(f"AWS CDK npm package: v{cdk_version}")
     else:
-        print("AWS CDK: not installed")
+        print("AWS CDK npm package: not installed")
 
     # Show Node.js version
     node_version = get_node_version()
@@ -142,6 +141,213 @@ def show_versions(verbose=False):
                 print("  AWS CDK: Apache License 2.0")
             if node_license:
                 print("  Node.js: MIT License")
+
+
+def create_node_symlink():
+    """
+    Create a symlink to the Node.js binary in a suitable directory in the user's PATH.
+
+    This function tries to create a symlink in the following locations, in priority order:
+    1. Virtual environment bin directories
+    2. Local .venv directories in current working directory
+    3. User-specific directories (~/.local/bin, ~/bin)
+    4. System directories (/usr/local/bin, /usr/bin) for root users
+    5. Script's parent directory as fallback
+
+    Returns:
+        bool: True if symlink was created successfully, False otherwise
+    """
+    logger.debug("Creating Node.js symlink")
+
+    # Find Node.js binary
+    node_binary = None
+
+    # Try to get the node path from runtime module
+    try:
+        node_path = runtime.get_node_path()
+        if node_path and os.path.exists(node_path) and os.access(node_path, os.X_OK):
+            node_binary = node_path
+            logger.debug(f"Found Node.js binary via runtime: {node_binary}")
+    except Exception as e:
+        logger.debug(f"Error getting Node.js path from runtime: {e}")
+
+    # Check NODE_BIN_PATH as fallback
+    if (
+        not node_binary
+        and os.path.exists(NODE_BIN_PATH)
+        and os.access(NODE_BIN_PATH, os.X_OK)
+    ):
+        node_binary = NODE_BIN_PATH
+        logger.debug(f"Found Node.js binary via NODE_BIN_PATH: {node_binary}")
+
+    # Check cache directory
+    if not node_binary:
+        logger.debug("Looking for Node.js binary in cache and other locations")
+        cache_dir = os.path.join(os.path.expanduser("~"), ".cache", "aws-cdk-cli")
+        cached_binary = os.path.join(
+            cache_dir, f"node-v{runtime.NODE_VERSION}", "bin", "node"
+        )
+        if os.path.exists(cached_binary) and os.access(cached_binary, os.X_OK):
+            node_binary = cached_binary
+            logger.debug(f"Found Node.js binary in cache: {node_binary}")
+
+    # If still not found, search for it in the node_binaries directory
+    if not node_binary:
+        logger.debug("Searching for Node.js binary in node_binaries directory")
+        node_binaries_dir = os.path.join(os.path.dirname(__file__), "node_binaries")
+        node_file = "node.exe" if SYSTEM == "windows" else "node"
+        
+        # Check common paths first before walking the directory
+        potential_paths = []
+        
+        # 1. Direct platform path (expected structure for Docker containers)
+        platform_dir = os.path.join(node_binaries_dir, SYSTEM, MACHINE)
+        if os.path.exists(platform_dir):
+            # Standard path for our installation
+            if SYSTEM == "windows":
+                potential_paths.append(os.path.join(platform_dir, node_file))
+            else:
+                potential_paths.append(os.path.join(platform_dir, "bin", node_file))
+            
+            # Look for node-v* directories for original node distribution structure
+            try:
+                for item in os.listdir(platform_dir):
+                    if item.startswith("node-v") and os.path.isdir(os.path.join(platform_dir, item)):
+                        if SYSTEM == "windows":
+                            potential_paths.append(os.path.join(platform_dir, item, node_file))
+                        else:
+                            potential_paths.append(os.path.join(platform_dir, item, "bin", node_file))
+            except (FileNotFoundError, PermissionError) as e:
+                logger.debug(f"Error listing platform directory: {e}")
+        
+        # Check all potential paths first
+        for potential_path in potential_paths:
+            if os.path.exists(potential_path) and (SYSTEM == "windows" or os.access(potential_path, os.X_OK)):
+                node_binary = potential_path
+                logger.debug(f"Found Node.js binary at predefined path: {node_binary}")
+                break
+        
+        # If still not found, do the recursive search as a last resort
+        if not node_binary:
+            for root, dirs, files in os.walk(node_binaries_dir):
+                if node_file in files:
+                    potential_node = os.path.join(root, node_file)
+                    if SYSTEM == "windows" or os.access(potential_node, os.X_OK):
+                        node_binary = potential_node
+                        logger.debug(f"Found Node.js binary via recursive search: {node_binary}")
+                        break
+
+    # Check if we found a valid Node.js binary
+    if not node_binary:
+        logger.error("Could not find Node.js binary")
+        return False
+
+    # Determine potential bin directories in priority order
+    bin_dirs = []
+
+    # 1. Virtual environment bin directory
+    if hasattr(sys, "prefix") and sys.prefix != sys.base_prefix:
+        if SYSTEM == "windows":
+            venv_bin_dir = os.path.join(sys.prefix, "Scripts")
+        else:
+            venv_bin_dir = os.path.join(sys.prefix, "bin")
+
+        if os.path.exists(venv_bin_dir):
+            bin_dirs.append(venv_bin_dir)
+            logger.debug(f"Found virtual environment bin directory: {venv_bin_dir}")
+
+    # 2. Look for .venv directory in current working directory
+    local_venv_bin = os.path.join(
+        os.getcwd(), ".venv", "bin" if SYSTEM != "windows" else "Scripts"
+    )
+    if os.path.exists(local_venv_bin):
+        bin_dirs.append(local_venv_bin)
+        logger.debug(f"Found local .venv bin directory: {local_venv_bin}")
+
+    # 3. User-specific directories
+    home_dir = os.path.expanduser("~")
+    user_bin_dirs = []
+
+    if SYSTEM != "windows":
+        user_bin_dirs = [
+            os.path.join(home_dir, ".local", "bin"),
+            os.path.join(home_dir, "bin"),
+            os.path.join(home_dir, ".bin"),
+        ]
+    else:
+        # Windows user directories
+        user_bin_dirs = [
+            os.path.join(home_dir, "AppData", "Local", "Programs", "Python", "Scripts"),
+            os.path.join(home_dir, "AppData", "Roaming", "Python", "Scripts"),
+        ]
+
+    for user_bin in user_bin_dirs:
+        if os.path.exists(user_bin) and os.access(user_bin, os.W_OK):
+            bin_dirs.append(user_bin)
+            logger.debug(f"Found user bin directory: {user_bin}")
+        elif not os.path.exists(user_bin):
+            try:
+                os.makedirs(user_bin, exist_ok=True)
+                bin_dirs.append(user_bin)
+                logger.debug(f"Created user bin directory: {user_bin}")
+            except (OSError, PermissionError) as e:
+                logger.debug(f"Could not create user bin directory {user_bin}: {e}")
+
+    # 4. Check for root user and add system directories
+    is_root = os.geteuid() == 0 if hasattr(os, "geteuid") else False
+    if is_root:
+        logger.debug("Running as root user, checking system bin directories")
+        for system_bin in ["/usr/local/bin", "/usr/bin"]:
+            if os.path.exists(system_bin) and os.access(system_bin, os.W_OK):
+                bin_dirs.append(system_bin)
+                logger.debug(f"Found writable system bin directory: {system_bin}")
+
+    # 5. Script directory as last resort
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    bin_dirs.append(script_dir)
+    logger.debug(f"Added script directory as fallback: {script_dir}")
+
+    # Try each bin directory in order
+    for bin_dir in bin_dirs:
+        # Determine target path
+        target_path = os.path.join(
+            bin_dir, "node.exe" if SYSTEM == "windows" else "node"
+        )
+        logger.debug(f"Attempting to create symlink at: {target_path}")
+
+        try:
+            # Remove existing symlink if it exists
+            if os.path.exists(target_path):
+                if SYSTEM != "windows" and os.path.islink(target_path):
+                    os.unlink(target_path)
+                else:
+                    os.remove(target_path)
+                logger.debug(f"Removed existing node binary at {target_path}")
+
+            # Create symlink or copy the binary
+            if SYSTEM == "windows":
+                # Windows: copy the binary instead of symlink
+                shutil.copy2(node_binary, target_path)
+                logger.debug(f"Copied Node.js binary to {target_path}")
+            else:
+                # Unix: create a symlink
+                os.symlink(node_binary, target_path)
+                # Set executable permissions
+                os.chmod(target_path, 0o755)
+                logger.debug(f"Created symlink from {node_binary} to {target_path}")
+
+            # Verify that the binary exists and is executable
+            if os.path.exists(target_path) and (
+                SYSTEM == "windows" or os.access(target_path, os.X_OK)
+            ):
+                logger.info(f"Node.js symlink created at {target_path}")
+                return True
+        except (OSError, PermissionError, shutil.Error) as e:
+            logger.debug(f"Failed to create Node.js symlink in {bin_dir}: {e}")
+            continue  # Try the next directory
+
+    logger.error("Failed to create Node.js symlink in any directory")
+    return False
 
 
 def main():
@@ -184,6 +390,11 @@ def main():
         "--show-node-warnings",
         action="store_true",
         help="Show Node.js version compatibility warnings (hidden by default)",
+    )
+    runtime_control.add_argument(
+        "--create-node-symlink",
+        action="store_true",
+        help="Create a symlink to the Node.js binary in a suitable directory",
     )
 
     # Add verbose mode
@@ -230,6 +441,21 @@ def main():
     if args.show_node_warnings:
         os.environ["AWS_CDK_CLI_SHOW_NODE_WARNINGS"] = "1"
         logger.debug("Showing Node.js version compatibility warnings")
+
+    # Handle explicit Node.js symlink creation
+    if (
+        args.create_node_symlink
+        or os.environ.get("AWS_CDK_CLI_CREATE_NODE_SYMLINK") == "1"
+    ):
+        if create_node_symlink():
+            print("Node.js symlink created successfully")
+        else:
+            print("Failed to create Node.js symlink")
+            return 1
+
+        # If only creating symlink, return here
+        if args.create_node_symlink and len(remaining) == 0:
+            return 0
 
     # Check for incompatible combinations
     if args.use_system_node and args.use_downloaded_node:

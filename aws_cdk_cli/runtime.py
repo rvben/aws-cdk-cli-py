@@ -5,6 +5,7 @@ import platform
 import subprocess
 import logging
 import shutil
+from typing import Optional
 
 # Configure logging
 logging.basicConfig(
@@ -24,7 +25,8 @@ MACHINE = platform.machine().lower()
 if MACHINE in ("amd64", "x86_64"):
     MACHINE = "x86_64"
 elif MACHINE in ("arm64", "aarch64"):
-    MACHINE = "aarch64" if SYSTEM == "linux" else "arm64"
+    # Always use arm64 for consistency with Node.js
+    MACHINE = "arm64"
 
 
 def get_package_dir():
@@ -32,45 +34,65 @@ def get_package_dir():
     return os.path.dirname(os.path.abspath(__file__))
 
 
-def get_node_path():
-    """Get the path to the downloaded Node.js executable."""
-    package_dir = get_package_dir()
-    node_binaries_dir = os.path.join(package_dir, "node_binaries", SYSTEM, MACHINE)
+def get_node_path() -> Optional[str]:
+    """
+    Get the path to the node binary. This function will check for the node binary
+    in the following locations:
+    1. NODE_BIN_PATH environment variable
+    2. NODE_PLATFORM_DIR environment variable (will append bin/node or node.exe)
+    3. cdk node_modules directory (if CDK_PATH is set)
+    4. System PATH
 
-    # Find the Node.js directory
-    if not os.path.exists(node_binaries_dir):
-        return None
+    Returns:
+        The path to the node binary or None if it can't be found
+    """
+    node_path = os.environ.get("NODE_BIN_PATH")
+    if node_path:
+        if os.path.exists(node_path) and (SYSTEM != "unix" or os.access(node_path, os.X_OK)):
+            return node_path
 
-    # Look for node-vX.Y.Z directories
-    for item in os.listdir(node_binaries_dir):
-        if item.startswith("node-v") and os.path.isdir(
-            os.path.join(node_binaries_dir, item)
-        ):
-            # We found a Node.js version directory
-            if SYSTEM == "windows":
-                # On Windows, node.exe is in the root of the extracted directory
-                node_exe = os.path.join(node_binaries_dir, item, "node.exe")
-                if os.path.exists(node_exe):
-                    return node_exe
-            else:
-                # On Unix systems, node is in the bin subdirectory
-                node_bin = os.path.join(node_binaries_dir, item, "bin", "node")
-                if os.path.exists(node_bin):
-                    return node_bin
+    node_platform_dir = os.environ.get("NODE_PLATFORM_DIR")
+    if node_platform_dir:
+        potential_paths = []
+        node_file = "node.exe" if SYSTEM == "windows" else "node"
+        
+        # Direct binary path (expected in Docker containers)
+        if SYSTEM == "windows":
+            direct_path = os.path.join(node_platform_dir, node_file)
+        else:
+            direct_path = os.path.join(node_platform_dir, "bin", node_file)
+            
+        if os.path.exists(direct_path) and (SYSTEM == "windows" or os.access(direct_path, os.X_OK)):
+            potential_paths.append(direct_path)
+            
+        # Check for node-v* directories (original node distribution structure)
+        try:
+            for item in os.listdir(node_platform_dir):
+                if item.startswith("node-v") and os.path.isdir(os.path.join(node_platform_dir, item)):
+                    bin_path = os.path.join(node_platform_dir, item, "bin" if SYSTEM != "windows" else "", node_file)
+                    if os.path.exists(bin_path) and (SYSTEM == "windows" or os.access(bin_path, os.X_OK)):
+                        potential_paths.append(bin_path)
+        except (FileNotFoundError, PermissionError):
+            pass
+            
+        # Return the first valid binary found
+        if potential_paths:
+            return potential_paths[0]
+            
+        # Fallback: search recursively
+        for root, dirs, files in os.walk(node_platform_dir):
+            if node_file in files:
+                full_path = os.path.join(root, node_file)
+                if os.path.exists(full_path) and (SYSTEM == "windows" or os.access(full_path, os.X_OK)):
+                    return full_path
 
-    # If we couldn't find a version directory, check for the binary directly
-    if SYSTEM == "windows":
-        node_exe = os.path.join(node_binaries_dir, "node.exe")
-        if os.path.exists(node_exe):
-            return node_exe
-
-        # As a last resort, search for node.exe in the directory tree
-        for root, dirs, files in os.walk(node_binaries_dir):
-            if "node.exe" in files:
-                return os.path.join(root, "node.exe")
-    else:
-        node_bin = os.path.join(node_binaries_dir, "bin", "node")
-        if os.path.exists(node_bin):
+    # Try to find it in the CDK path
+    cdk_path = os.environ.get("CDK_PATH")
+    if cdk_path:
+        node_modules_path = os.path.join(cdk_path, "node_modules")
+        # Try to find node in node_modules/.bin directory
+        node_bin = os.path.join(node_modules_path, ".bin", "node")
+        if os.path.exists(node_bin) and (SYSTEM != "unix" or os.access(node_bin, os.X_OK)):
             return node_bin
 
     return None
@@ -114,16 +136,16 @@ def get_cdk_path():
 def ensure_node_installed():
     """
     Ensure that Node.js is installed and available.
-    
+
     This function tries to find a JavaScript runtime in the following order:
     1. System Node.js (if USE_SYSTEM_NODE is specified)
     2. Bun (if USE_BUN is specified)
     3. Downloaded Node.js (downloaded if not present)
-    
+
     Environment variables that control behavior:
     - AWS_CDK_CLI_USE_SYSTEM_NODE: If set, use system Node.js rather than downloaded Node.js
     - AWS_CDK_CLI_USE_BUN: If set, use Bun runtime instead of Node.js
-    
+
     Default behavior is to use system Node.js if available and compatible, then fall back to downloaded Node.js.
     """
     # We always use the installer's setup_nodejs function to handle runtime selection
@@ -155,6 +177,25 @@ def run_cdk(args):
     if cdk_path is None:
         logger.error("CDK CLI not found in the package.")
         return 1
+
+    # Create symlink to Node.js:
+    # 1. Always when using downloaded Node.js (not system Node.js)
+    # 2. When explicitly requested via environment variable
+    system_node_path = get_system_node_path()
+    using_system_nodejs = system_node_path and os.path.samefile(
+        js_runtime_path, system_node_path
+    )
+    explicitly_requested = os.environ.get("AWS_CDK_CLI_CREATE_NODE_SYMLINK") == "1"
+
+    if (not using_system_nodejs) or explicitly_requested:
+        try:
+            from aws_cdk_cli.cli import create_node_symlink
+
+            create_node_symlink()
+        except ImportError:
+            logger.debug("Could not create Node.js symlink: CLI module not available")
+        except Exception as e:
+            logger.debug(f"Failed to create Node.js symlink: {e}")
 
     # Prepare the command
     cmd = [js_runtime_path, cdk_path] + args

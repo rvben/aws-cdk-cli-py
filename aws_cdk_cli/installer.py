@@ -15,7 +15,6 @@ import hashlib
 import re
 import urllib.request
 import urllib.error
-import datetime
 
 # Import our custom modules instead of external dependencies
 from . import semver_helper as semver
@@ -47,7 +46,7 @@ NODE_URLS = {
     },
     "linux": {
         "x86_64": f"https://nodejs.org/dist/v{NODE_VERSION}/node-v{NODE_VERSION}-linux-x64.tar.gz",
-        "aarch64": f"https://nodejs.org/dist/v{NODE_VERSION}/node-v{NODE_VERSION}-linux-arm64.tar.gz",
+        "arm64": f"https://nodejs.org/dist/v{NODE_VERSION}/node-v{NODE_VERSION}-linux-arm64.tar.gz",
     },
     "windows": {
         "x86_64": f"https://nodejs.org/dist/v{NODE_VERSION}/node-v{NODE_VERSION}-win-x64.zip",
@@ -62,7 +61,7 @@ NODE_CHECKSUMS = {
     },
     "linux": {
         "x86_64": "2b4e1d21eef715d126b99b05c089c7ae518c8ae60f2b2607e68484d3bb1eb083",
-        "aarch64": "5693ca1e9486868b9c5d8ba0237d851b97b5c48c4e24d93ad04ee8d7914826b4",
+        "arm64": "5693ca1e9486868b9c5d8ba0237d851b97b5c48c4e24d93ad04ee8d7914826b4",
     },
     "windows": {
         "x86_64": "fe1a592a8bf0ef555d59cdcea29fd90338e7e5dc677bcc8efafe0ffced0a7aee",
@@ -113,8 +112,10 @@ def get_latest_cdk_version():
 
         # Last resort: try to fetch from npm registry using urllib
         try:
-            with urllib.request.urlopen("https://registry.npmjs.org/aws-cdk/latest") as response:
-                data = json.loads(response.read().decode('utf-8'))
+            with urllib.request.urlopen(
+                "https://registry.npmjs.org/aws-cdk/latest"
+            ) as response:
+                data = json.loads(response.read().decode("utf-8"))
                 return data.get("version")
         except (urllib.error.HTTPError, Exception):
             pass
@@ -157,8 +158,8 @@ def verify_node_binary(file_path, expected_checksum):
 def download_node():
     """Download Node.js binaries for the current platform."""
     try:
+        # We're now standardized on arm64 so no need for special handling
         node_url = NODE_URLS[SYSTEM][MACHINE]
-        expected_checksum = NODE_CHECKSUMS.get(SYSTEM, {}).get(MACHINE)
     except KeyError:
         error_msg = f"Unsupported platform: {SYSTEM}-{MACHINE}"
         logger.error(error_msg)
@@ -174,14 +175,12 @@ def download_node():
 
     # Determine the archive filename (zip for Windows, tar.gz for others)
     archive_ext = "zip" if SYSTEM == "windows" else "tar.gz"
-    archive_name = f"node-v{NODE_VERSION}-{SYSTEM}-{MACHINE if MACHINE != 'aarch64' else 'arm64'}.{archive_ext}"
-
-    # For linux, the architecture in the filename might be x64 instead of x86_64
-    if SYSTEM == "linux" and MACHINE == "x86_64":
-        archive_name = f"node-v{NODE_VERSION}-linux-x64.{archive_ext}"
-    elif SYSTEM == "linux" and MACHINE == "aarch64":
-        archive_name = f"node-v{NODE_VERSION}-linux-arm64.{archive_ext}"
-
+    
+    # Node.js uses x64 instead of x86_64 in filenames
+    filename_arch = "x64" if MACHINE == "x86_64" and SYSTEM != "windows" else MACHINE
+        
+    archive_name = f"node-v{NODE_VERSION}-{SYSTEM}-{filename_arch}.{archive_ext}"
+    
     cached_archive = os.path.join(CACHE_DIR, archive_name)
 
     def download_fresh_copy():
@@ -259,7 +258,14 @@ def download_node():
                         member_path = os.path.join(path, member.name)
                         if not is_within_directory(path, member_path):
                             raise Exception("Attempted Path Traversal in Tar File")
-                    tar.extractall(path, members, numeric_owner=numeric_owner)
+
+                    # Use the 'data' filter parameter if available (Python 3.12+)
+                    if sys.version_info >= (3, 12):
+                        tar.extractall(
+                            path, members, numeric_owner=numeric_owner, filter="data"
+                        )
+                    else:
+                        tar.extractall(path, members, numeric_owner=numeric_owner)
 
                 safe_extract(tar_ref, extract_dir)
 
@@ -272,14 +278,98 @@ def download_node():
             except Exception as e:
                 logger.warning(f"Could not delete temporary file {download_path}: {e}")
 
-        # Get node binary path from runtime helper instead of direct path
-        from aws_cdk_cli.runtime import get_node_path
+        # Verify the binary exists - use a more direct approach
+        # Expected path patterns based on Node.js distribution layout
+        expected_bin_paths = []
+        
+        # The parent that contains the NODE_PLATFORM_DIR (e.g. .../node_binaries)
+        parent_dir = os.path.dirname(NODE_PLATFORM_DIR)
+        
+        if SYSTEM == "windows":
+            # Windows paths
+            expected_bin_paths = [
+                # Standard path in NODE_BIN_PATH
+                NODE_BIN_PATH,
+                # Direct in platform dir
+                os.path.join(NODE_PLATFORM_DIR, "node.exe"),
+                # Version-specific subdirectory
+                os.path.join(NODE_PLATFORM_DIR, f"node-v{NODE_VERSION}-win-x64", "node.exe"),
+            ]
+        else:
+            # For architecture in filenames, Node.js distributions always use:
+            # - x64 (not x86_64)
+            # - arm64 (not aarch64)
+            arch_suffix = "x64" if MACHINE == "x86_64" else "arm64"
+            
+            # Unix paths (Linux/macOS)
+            expected_bin_paths = [
+                # Standard path in NODE_BIN_PATH
+                NODE_BIN_PATH,
+                # Direct in platform dir
+                os.path.join(NODE_PLATFORM_DIR, "bin", "node"),
+                # Version-specific subdirectory - typical Node.js layout
+                os.path.join(NODE_PLATFORM_DIR, f"node-v{NODE_VERSION}-{SYSTEM}-{arch_suffix}", "bin", "node"),
+            ]
+            
+            # Add cross-platform paths to handle different directory structures 
+            # regardless of what the platform claims to be
+            expected_bin_paths.extend([
+                # Linux paths with both architectures
+                os.path.join(NODE_PLATFORM_DIR, f"node-v{NODE_VERSION}-linux-x64", "bin", "node"),
+                os.path.join(NODE_PLATFORM_DIR, f"node-v{NODE_VERSION}-linux-arm64", "bin", "node"),
+                # macOS paths with both architectures
+                os.path.join(NODE_PLATFORM_DIR, f"node-v{NODE_VERSION}-darwin-x64", "bin", "node"),
+                os.path.join(NODE_PLATFORM_DIR, f"node-v{NODE_VERSION}-darwin-arm64", "bin", "node"),
+            ])
+            
+            # Special case: if we're on linux/aarch64, also check the extracted directory that uses arm64 in the name
+            if SYSTEM == "linux" and MACHINE == "aarch64":
+                expected_bin_paths.append(
+                    os.path.join(parent_dir, "linux", "arm64", f"node-v{NODE_VERSION}-linux-arm64", "bin", "node")
+                )
+            
+            # Special case: check for a location where the tarball might have been extracted 
+            # with a different parent directory structure
+            node_version_dir = f"node-v{NODE_VERSION}-{SYSTEM}-{arch_suffix}"
+            expected_bin_paths.extend([
+                os.path.join(parent_dir, node_version_dir, "bin", "node"),  # Extracted to parent dir
+                os.path.join(NODE_PLATFORM_DIR, "node", "bin", "node"),    # Extracted to 'node' subdir
+            ])
 
-        node_path = get_node_path()
+        logger.debug(f"Checking for Node.js binary in: {expected_bin_paths}")
 
-        # Verify the binary exists
+        # Check all possible paths and use the first one that exists
+        node_path = None
+        for path in expected_bin_paths:
+            if os.path.exists(path) and os.path.isfile(path):
+                logger.info(f"Found Node.js binary at {path}")
+                # Make sure the binary is executable on Unix-like systems
+                if SYSTEM != "windows" and not os.access(path, os.X_OK):
+                    logger.debug(f"Making Node.js binary executable: {path}")
+                    os.chmod(path, 0o755)
+                node_path = path
+                break
+                
+        # If none found, perform a more exhaustive search
+        if not node_path:
+            logger.debug("Binary not found in expected locations, searching recursively...")
+            node_exe = "node.exe" if SYSTEM == "windows" else "node"
+            
+            # Search recursively in NODE_PLATFORM_DIR
+            for root, dirs, files in os.walk(NODE_PLATFORM_DIR):
+                if node_exe in files:
+                    node_path = os.path.join(root, node_exe)
+                    logger.info(f"Found Node.js binary during recursive search: {node_path}")
+                    # Make sure it's executable on Unix
+                    if SYSTEM != "windows" and not os.access(node_path, os.X_OK):
+                        os.chmod(node_path, 0o755)
+                    break
+        
+        # Final check if we found a valid binary
         if not node_path or not os.path.exists(node_path):
-            # Check the directory structure to help diagnose the issue
+            error_msg = f"Node.js binary not found after extraction in any expected location"
+            logger.error(error_msg)
+            # Log the directory structure for debugging
             logger.debug(f"Contents of {NODE_PLATFORM_DIR}:")
             if os.path.exists(NODE_PLATFORM_DIR):
                 for root, dirs, files in os.walk(NODE_PLATFORM_DIR):
@@ -288,20 +378,6 @@ def download_node():
                         logger.debug(f"  Subdir: {d}")
                     for f in files:
                         logger.debug(f"  File: {f}")
-
-            # For Unix systems, check if the binary is in the expected tarball directory structure
-            if SYSTEM != "windows":
-                # Node.js tarballs contain a directory like "node-v22.14.0-linux-x64"
-                expected_dir_name = f"node-v{NODE_VERSION}-{SYSTEM}-{'x64' if MACHINE == 'x86_64' else 'arm64'}"
-                expected_dir_path = os.path.join(NODE_PLATFORM_DIR, expected_dir_name)
-                expected_bin_path = os.path.join(expected_dir_path, "bin", "node")
-
-                if os.path.exists(expected_bin_path):
-                    logger.info(f"Found Node.js binary at {expected_bin_path}")
-                    return True, None
-
-            error_msg = f"Node binary not found after extraction. Checked NODE_BIN_PATH: {NODE_BIN_PATH} and runtime path: {node_path}"
-            logger.error(error_msg)
             return False, error_msg
 
         return True, None
@@ -824,7 +900,7 @@ def main():
         if not success:
             logger.error(f"Failed to download Node.js: {error}")
             return 1
-        
+
         logger.info("Node.js downloaded successfully")
 
     return 0
