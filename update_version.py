@@ -10,6 +10,15 @@ import sys
 import re
 import datetime
 
+def validate_version(version: str, name: str) -> None:
+    """Validate version string as x.y.z or x.y.z.n; exit on failure."""
+    pattern = r"^\d+\.\d+\.\d+(?:\.\d+)?$"
+    example = "x.y.z or x.y.z.n"
+    if not re.match(pattern, version):
+        print(f"Error: Invalid {name} format: {version}")
+        print(f"{name.capitalize()} must be in the format {example}")
+        sys.exit(1)
+
 # Get the CDK version from the command-line argument or environment variable
 cdk_version = None
 
@@ -34,21 +43,17 @@ if not cdk_version:
 if cdk_version.startswith('v'):
     cdk_version = cdk_version[1:]
 
-# Validate CDK version format
-if not re.match(r"^\d+\.\d+\.\d+$", cdk_version):
-    print(f"Error: Invalid CDK version format: {cdk_version}")
-    print("Version must be in the format x.y.z")
-    sys.exit(1)
+validate_version(cdk_version, "CDK version")
 
 # Get the wrapper version - either from environment variable or use CDK version
 wrapper_version = os.environ.get("WRAPPER_VERSION", cdk_version)
 print(f"Using wrapper version: {wrapper_version}")
 
-# Validate wrapper version format
-if not re.match(r"^\d+\.\d+\.\d+(?:\.\d+)?$", wrapper_version):
-    print(f"Error: Invalid wrapper version format: {wrapper_version}")
-    print("Version must be in the format x.y.z or x.y.z.n")
-    sys.exit(1)
+# Strip leading 'v' if present
+if wrapper_version.startswith('v'):
+    wrapper_version = wrapper_version[1:]
+
+validate_version(wrapper_version, "wrapper version")
 
 # Extract the Node.js version from installer.py
 node_version = None
