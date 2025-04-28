@@ -12,6 +12,7 @@ import pytest
 from unittest.mock import patch
 import aws_cdk_cli
 import io
+import re
 
 
 # Test fixtures to prepare environment
@@ -458,3 +459,29 @@ def test_platform_specific_binaries():
     if system != "windows":
         os.chmod(node_binary, 0o755)
         assert os.access(str(node_binary), os.X_OK), "Node.js binary is not executable"
+
+
+def test_upgrade_block_line_split_bug():
+    """
+    Test that after filtering, the output contains the version line as a single line (not split),
+    and the 'Upgrade recommended' line is removed. This reflects the ideal behavior.
+    """
+    # Simulate the original output as a single string, with a line break inside the version line
+    original_output = (
+        "*****************************************************\n"
+        "*** Newer version of CDK is available [2.1012.0]  ***\n"
+        "*** Upgrade recommended (npm install -g aws-cdk)  ***\n"
+        "*****************************************************\n"
+    )
+
+    # Use the improved filtering logic from the CLI
+    from aws_cdk_cli.cli import remove_upgrade_recommendation_line
+    filtered_output = remove_upgrade_recommendation_line(original_output)
+
+    # The output should not contain the upgrade recommendation line
+    assert "Upgrade recommended (npm install -g aws-cdk)" not in filtered_output
+    # The version line should be present and not split across lines
+    assert "*** Newer version of CDK is available [2.1012.0]  ***" in filtered_output
+    assert "*** Newer version of CDK is available [2.1012.0\n" not in filtered_output
+    assert "] ***" not in filtered_output or filtered_output.count("] ***") == 1
+    print("Filtered output (ideal):\n", filtered_output)

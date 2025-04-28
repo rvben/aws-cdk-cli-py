@@ -188,7 +188,7 @@ def download_node():
         logger.debug("Downloading a fresh copy of Node.js")
         temp_file = tempfile.NamedTemporaryFile(delete=False).name
         try:
-            # Download with progress bar using our custom module
+            # Download copy
             download.download_file(url=node_url, file_path=temp_file)
 
             # Verify the download

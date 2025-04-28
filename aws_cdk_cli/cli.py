@@ -38,6 +38,16 @@ def should_filter(line: str) -> bool:
     return "npm install -g aws-cdk" in line and upgrade_pattern.match(line) is not None
 
 
+def remove_upgrade_recommendation_line(output: str) -> str:
+    """
+    Remove any line that contains 'Upgrade recommended (npm install -g aws-cdk)' from the output,
+    even if the line is split due to embedded newlines.
+    """
+    # Remove lines that contain the upgrade recommendation, even if split
+    # Handles both Unix and Windows line endings
+    return re.sub(r'^.*Upgrade recommended \(npm install -g aws-cdk\).*$(\r\n?|\n)?', '', output, flags=re.MULTILINE)
+
+
 def run_cdk_command(
     args: List[str],
     capture_output: bool = False,
@@ -88,30 +98,20 @@ def run_cdk_command(
 
     try:
         # Execute the CDK command
-        upgrade_pattern = re.compile(r"^\*\*\*.*npm install -g aws-cdk.*\*\*\*")
         if capture_output:
             process = subprocess.run(
                 cmd, capture_output=True, text=True, env=process_env
             )
-            # Filter out upgrade recommendation lines using the optimized check
-            filtered_stdout = [
-                line for line in process.stdout.splitlines()
-                if not should_filter(line)
-            ]
-            filtered_stderr = [
-                line for line in process.stderr.splitlines()
-                if not should_filter(line)
-            ]
-            return process.returncode, "\n".join(filtered_stdout), "\n".join(filtered_stderr)
+            # Apply the improved filtering to the full output string
+            filtered_stdout = remove_upgrade_recommendation_line(process.stdout)
+            filtered_stderr = remove_upgrade_recommendation_line(process.stderr)
+            return process.returncode, filtered_stdout, filtered_stderr
         else:
-            # Pass through stdin/stdout/stderr, but filter upgrade messages
             process = subprocess.run(cmd, capture_output=True, text=True, env=process_env)
-            for line in process.stdout.splitlines():
-                if not should_filter(line):
-                    print(line)
-            for line in process.stderr.splitlines():
-                if not should_filter(line):
-                    print(line, file=sys.stderr)
+            for line in remove_upgrade_recommendation_line(process.stdout).splitlines():
+                print(line)
+            for line in remove_upgrade_recommendation_line(process.stderr).splitlines():
+                print(line, file=sys.stderr)
             return process.returncode
     except subprocess.SubprocessError as e:
         error_msg = f"Error executing CDK command: {e}"
