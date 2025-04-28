@@ -11,6 +11,8 @@ import argparse
 from . import runtime
 from . import version
 import shutil
+import re
+from typing import List, Tuple, Optional, Union
 
 from aws_cdk_cli import (
     __version__,
@@ -30,7 +32,17 @@ logging.basicConfig(level=logging.WARNING, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 
-def run_cdk_command(args, capture_output=False, env=None):
+def should_filter(line: str) -> bool:
+    """Return True if the line should be filtered out (upgrade recommendation)."""
+    upgrade_pattern = re.compile(r"^\*\*\*.*npm install -g aws-cdk.*\*\*\*")
+    return "npm install -g aws-cdk" in line and upgrade_pattern.match(line) is not None
+
+
+def run_cdk_command(
+    args: List[str],
+    capture_output: bool = False,
+    env: Optional[dict] = None
+) -> Union[int, Tuple[int, str, str]]:
     """
     Run a CDK command with the given arguments using downloaded Node.js.
 
@@ -76,14 +88,30 @@ def run_cdk_command(args, capture_output=False, env=None):
 
     try:
         # Execute the CDK command
+        upgrade_pattern = re.compile(r"^\*\*\*.*npm install -g aws-cdk.*\*\*\*")
         if capture_output:
             process = subprocess.run(
                 cmd, capture_output=True, text=True, env=process_env
             )
-            return process.returncode, process.stdout, process.stderr
+            # Filter out upgrade recommendation lines using the optimized check
+            filtered_stdout = [
+                line for line in process.stdout.splitlines()
+                if not should_filter(line)
+            ]
+            filtered_stderr = [
+                line for line in process.stderr.splitlines()
+                if not should_filter(line)
+            ]
+            return process.returncode, "\n".join(filtered_stdout), "\n".join(filtered_stderr)
         else:
-            # Pass through stdin/stdout/stderr
-            process = subprocess.run(cmd, env=process_env)
+            # Pass through stdin/stdout/stderr, but filter upgrade messages
+            process = subprocess.run(cmd, capture_output=True, text=True, env=process_env)
+            for line in process.stdout.splitlines():
+                if not should_filter(line):
+                    print(line)
+            for line in process.stderr.splitlines():
+                if not should_filter(line):
+                    print(line, file=sys.stderr)
             return process.returncode
     except subprocess.SubprocessError as e:
         error_msg = f"Error executing CDK command: {e}"

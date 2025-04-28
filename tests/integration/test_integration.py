@@ -98,6 +98,9 @@ def test_node_download(clean_environment):
     )
     node_binaries_dir.mkdir(parents=True, exist_ok=True)
 
+    # Set NODE_PLATFORM_DIR so get_node_path can find the mock binary
+    os.environ["NODE_PLATFORM_DIR"] = str(node_binaries_dir)
+
     if system == "windows":
         # On Windows, we can't easily create a mock executable as a text file
         # So instead, just prepare the path where the binary would be and skip actual creation
@@ -263,6 +266,9 @@ app.synth()
         Path(aws_cdk_cli.__file__).parent / "node_binaries" / system / machine
     )
     node_binaries_dir.mkdir(parents=True, exist_ok=True)
+
+    # Set NODE_PLATFORM_DIR so get_node_path can find the mock binary
+    os.environ["NODE_PLATFORM_DIR"] = str(node_binaries_dir)
 
     if system == "windows":
         node_bin_path = node_binaries_dir / "node.exe"
