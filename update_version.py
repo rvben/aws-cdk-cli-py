@@ -30,6 +30,10 @@ if not cdk_version:
     print("   or: export CDK_VERSION=<cdk_version> && python update_version.py")
     sys.exit(1)
 
+# Strip leading 'v' if present
+if cdk_version.startswith('v'):
+    cdk_version = cdk_version[1:]
+
 # Validate CDK version format
 if not re.match(r"^\d+\.\d+\.\d+$", cdk_version):
     print(f"Error: Invalid CDK version format: {cdk_version}")
