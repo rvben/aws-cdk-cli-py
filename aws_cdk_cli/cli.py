@@ -38,20 +38,8 @@ def should_filter(line: str) -> bool:
     return "npm install -g aws-cdk" in line and upgrade_pattern.match(line) is not None
 
 
-def remove_upgrade_recommendation_line(output: str) -> str:
-    """
-    Remove any line that contains 'Upgrade recommended (npm install -g aws-cdk)' from the output,
-    even if the line is split due to embedded newlines.
-    """
-    # Remove lines that contain the upgrade recommendation, even if split
-    # Handles both Unix and Windows line endings
-    return re.sub(r'^.*Upgrade recommended \(npm install -g aws-cdk\).*$(\r\n?|\n)?', '', output, flags=re.MULTILINE)
-
-
 def run_cdk_command(
-    args: List[str],
-    capture_output: bool = False,
-    env: Optional[dict] = None
+    args: List[str], capture_output: bool = False, env: Optional[dict] = None
 ) -> Union[int, Tuple[int, str, str]]:
     """
     Run a CDK command with the given arguments using downloaded Node.js.
@@ -102,16 +90,29 @@ def run_cdk_command(
             process = subprocess.run(
                 cmd, capture_output=True, text=True, env=process_env
             )
-            # Apply the improved filtering to the full output string
-            filtered_stdout = remove_upgrade_recommendation_line(process.stdout)
-            filtered_stderr = remove_upgrade_recommendation_line(process.stderr)
-            return process.returncode, filtered_stdout, filtered_stderr
+            # Filter out upgrade recommendation lines using the optimized check
+            filtered_stdout = [
+                line for line in process.stdout.splitlines() if not should_filter(line)
+            ]
+            filtered_stderr = [
+                line for line in process.stderr.splitlines() if not should_filter(line)
+            ]
+            return (
+                process.returncode,
+                "\n".join(filtered_stdout),
+                "\n".join(filtered_stderr),
+            )
         else:
-            process = subprocess.run(cmd, capture_output=True, text=True, env=process_env)
-            for line in remove_upgrade_recommendation_line(process.stdout).splitlines():
-                print(line)
-            for line in remove_upgrade_recommendation_line(process.stderr).splitlines():
-                print(line, file=sys.stderr)
+            # Pass through stdin/stdout/stderr, but filter upgrade messages
+            process = subprocess.run(
+                cmd, capture_output=True, text=True, env=process_env
+            )
+            for line in process.stdout.splitlines():
+                if not should_filter(line):
+                    print(line)
+            for line in process.stderr.splitlines():
+                if not should_filter(line):
+                    print(line, file=sys.stderr)
             return process.returncode
     except subprocess.SubprocessError as e:
         error_msg = f"Error executing CDK command: {e}"
@@ -224,10 +225,10 @@ def create_node_symlink():
         logger.debug("Searching for Node.js binary in node_binaries directory")
         node_binaries_dir = os.path.join(os.path.dirname(__file__), "node_binaries")
         node_file = "node.exe" if SYSTEM == "windows" else "node"
-        
+
         # Check common paths first before walking the directory
         potential_paths = []
-        
+
         # 1. Direct platform path (expected structure for Docker containers)
         platform_dir = os.path.join(node_binaries_dir, SYSTEM, MACHINE)
         if os.path.exists(platform_dir):
@@ -236,25 +237,33 @@ def create_node_symlink():
                 potential_paths.append(os.path.join(platform_dir, node_file))
             else:
                 potential_paths.append(os.path.join(platform_dir, "bin", node_file))
-            
+
             # Look for node-v* directories for original node distribution structure
             try:
                 for item in os.listdir(platform_dir):
-                    if item.startswith("node-v") and os.path.isdir(os.path.join(platform_dir, item)):
+                    if item.startswith("node-v") and os.path.isdir(
+                        os.path.join(platform_dir, item)
+                    ):
                         if SYSTEM == "windows":
-                            potential_paths.append(os.path.join(platform_dir, item, node_file))
+                            potential_paths.append(
+                                os.path.join(platform_dir, item, node_file)
+                            )
                         else:
-                            potential_paths.append(os.path.join(platform_dir, item, "bin", node_file))
+                            potential_paths.append(
+                                os.path.join(platform_dir, item, "bin", node_file)
+                            )
             except (FileNotFoundError, PermissionError) as e:
                 logger.debug(f"Error listing platform directory: {e}")
-        
+
         # Check all potential paths first
         for potential_path in potential_paths:
-            if os.path.exists(potential_path) and (SYSTEM == "windows" or os.access(potential_path, os.X_OK)):
+            if os.path.exists(potential_path) and (
+                SYSTEM == "windows" or os.access(potential_path, os.X_OK)
+            ):
                 node_binary = potential_path
                 logger.debug(f"Found Node.js binary at predefined path: {node_binary}")
                 break
-        
+
         # If still not found, do the recursive search as a last resort
         if not node_binary:
             for root, dirs, files in os.walk(node_binaries_dir):
@@ -262,7 +271,9 @@ def create_node_symlink():
                     potential_node = os.path.join(root, node_file)
                     if SYSTEM == "windows" or os.access(potential_node, os.X_OK):
                         node_binary = potential_node
-                        logger.debug(f"Found Node.js binary via recursive search: {node_binary}")
+                        logger.debug(
+                            f"Found Node.js binary via recursive search: {node_binary}"
+                        )
                         break
 
     # Check if we found a valid Node.js binary

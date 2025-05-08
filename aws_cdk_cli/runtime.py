@@ -48,42 +48,57 @@ def get_node_path() -> Optional[str]:
     """
     node_path = os.environ.get("NODE_BIN_PATH")
     if node_path:
-        if os.path.exists(node_path) and (SYSTEM != "unix" or os.access(node_path, os.X_OK)):
+        if os.path.exists(node_path) and (
+            SYSTEM != "unix" or os.access(node_path, os.X_OK)
+        ):
             return node_path
 
     node_platform_dir = os.environ.get("NODE_PLATFORM_DIR")
     if node_platform_dir:
         potential_paths = []
         node_file = "node.exe" if SYSTEM == "windows" else "node"
-        
+
         # Direct binary path (expected in Docker containers)
         if SYSTEM == "windows":
             direct_path = os.path.join(node_platform_dir, node_file)
         else:
             direct_path = os.path.join(node_platform_dir, "bin", node_file)
-            
-        if os.path.exists(direct_path) and (SYSTEM == "windows" or os.access(direct_path, os.X_OK)):
+
+        if os.path.exists(direct_path) and (
+            SYSTEM == "windows" or os.access(direct_path, os.X_OK)
+        ):
             potential_paths.append(direct_path)
-            
+
         # Check for node-v* directories (original node distribution structure)
         try:
             for item in os.listdir(node_platform_dir):
-                if item.startswith("node-v") and os.path.isdir(os.path.join(node_platform_dir, item)):
-                    bin_path = os.path.join(node_platform_dir, item, "bin" if SYSTEM != "windows" else "", node_file)
-                    if os.path.exists(bin_path) and (SYSTEM == "windows" or os.access(bin_path, os.X_OK)):
+                if item.startswith("node-v") and os.path.isdir(
+                    os.path.join(node_platform_dir, item)
+                ):
+                    bin_path = os.path.join(
+                        node_platform_dir,
+                        item,
+                        "bin" if SYSTEM != "windows" else "",
+                        node_file,
+                    )
+                    if os.path.exists(bin_path) and (
+                        SYSTEM == "windows" or os.access(bin_path, os.X_OK)
+                    ):
                         potential_paths.append(bin_path)
         except (FileNotFoundError, PermissionError):
             pass
-            
+
         # Return the first valid binary found
         if potential_paths:
             return potential_paths[0]
-            
+
         # Fallback: search recursively
         for root, dirs, files in os.walk(node_platform_dir):
             if node_file in files:
                 full_path = os.path.join(root, node_file)
-                if os.path.exists(full_path) and (SYSTEM == "windows" or os.access(full_path, os.X_OK)):
+                if os.path.exists(full_path) and (
+                    SYSTEM == "windows" or os.access(full_path, os.X_OK)
+                ):
                     return full_path
 
     # Try to find it in the CDK path
@@ -92,7 +107,9 @@ def get_node_path() -> Optional[str]:
         node_modules_path = os.path.join(cdk_path, "node_modules")
         # Try to find node in node_modules/.bin directory
         node_bin = os.path.join(node_modules_path, ".bin", "node")
-        if os.path.exists(node_bin) and (SYSTEM != "unix" or os.access(node_bin, os.X_OK)):
+        if os.path.exists(node_bin) and (
+            SYSTEM != "unix" or os.access(node_bin, os.X_OK)
+        ):
             return node_bin
 
     return None

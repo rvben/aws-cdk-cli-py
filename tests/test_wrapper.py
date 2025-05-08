@@ -52,14 +52,14 @@ def test_installation():
 def test_cdk_version():
     """Test if the CDK version command works."""
     import unittest.mock
-    
+
     # Redirect stdout to capture output
     stdout_capture = io.StringIO()
-    
-    with unittest.mock.patch('sys.stdout', stdout_capture):
+
+    with unittest.mock.patch("sys.stdout", stdout_capture):
         # Call the CLI module directly
         from aws_cdk_cli.cli import main
-        
+
         with unittest.mock.patch.object(
             sys, "argv", ["aws_cdk_cli.cli", "--wrapper-version"]
         ):
@@ -67,10 +67,12 @@ def test_cdk_version():
                 main()
             except SystemExit as e:
                 assert e.code == 0, f"CLI exited with non-zero exit code: {e.code}"
-    
+
     # Get the captured output and check it
     output = stdout_capture.getvalue()
-    assert "AWS CDK Python Wrapper" in output, f"Expected wrapper version info in output, got: {output}"
+    assert "AWS CDK Python Wrapper" in output, (
+        f"Expected wrapper version info in output, got: {output}"
+    )
 
 
 @pytest.mark.slow

@@ -175,12 +175,12 @@ def download_node():
 
     # Determine the archive filename (zip for Windows, tar.gz for others)
     archive_ext = "zip" if SYSTEM == "windows" else "tar.gz"
-    
+
     # Node.js uses x64 instead of x86_64 in filenames
     filename_arch = "x64" if MACHINE == "x86_64" and SYSTEM != "windows" else MACHINE
-        
+
     archive_name = f"node-v{NODE_VERSION}-{SYSTEM}-{filename_arch}.{archive_ext}"
-    
+
     cached_archive = os.path.join(CACHE_DIR, archive_name)
 
     def download_fresh_copy():
@@ -281,10 +281,10 @@ def download_node():
         # Verify the binary exists - use a more direct approach
         # Expected path patterns based on Node.js distribution layout
         expected_bin_paths = []
-        
+
         # The parent that contains the NODE_PLATFORM_DIR (e.g. .../node_binaries)
         parent_dir = os.path.dirname(NODE_PLATFORM_DIR)
-        
+
         if SYSTEM == "windows":
             # Windows paths
             expected_bin_paths = [
@@ -293,14 +293,16 @@ def download_node():
                 # Direct in platform dir
                 os.path.join(NODE_PLATFORM_DIR, "node.exe"),
                 # Version-specific subdirectory
-                os.path.join(NODE_PLATFORM_DIR, f"node-v{NODE_VERSION}-win-x64", "node.exe"),
+                os.path.join(
+                    NODE_PLATFORM_DIR, f"node-v{NODE_VERSION}-win-x64", "node.exe"
+                ),
             ]
         else:
             # For architecture in filenames, Node.js distributions always use:
             # - x64 (not x86_64)
             # - arm64 (not aarch64)
             arch_suffix = "x64" if MACHINE == "x86_64" else "arm64"
-            
+
             # Unix paths (Linux/macOS)
             expected_bin_paths = [
                 # Standard path in NODE_BIN_PATH
@@ -308,33 +310,73 @@ def download_node():
                 # Direct in platform dir
                 os.path.join(NODE_PLATFORM_DIR, "bin", "node"),
                 # Version-specific subdirectory - typical Node.js layout
-                os.path.join(NODE_PLATFORM_DIR, f"node-v{NODE_VERSION}-{SYSTEM}-{arch_suffix}", "bin", "node"),
+                os.path.join(
+                    NODE_PLATFORM_DIR,
+                    f"node-v{NODE_VERSION}-{SYSTEM}-{arch_suffix}",
+                    "bin",
+                    "node",
+                ),
             ]
-            
-            # Add cross-platform paths to handle different directory structures 
+
+            # Add cross-platform paths to handle different directory structures
             # regardless of what the platform claims to be
-            expected_bin_paths.extend([
-                # Linux paths with both architectures
-                os.path.join(NODE_PLATFORM_DIR, f"node-v{NODE_VERSION}-linux-x64", "bin", "node"),
-                os.path.join(NODE_PLATFORM_DIR, f"node-v{NODE_VERSION}-linux-arm64", "bin", "node"),
-                # macOS paths with both architectures
-                os.path.join(NODE_PLATFORM_DIR, f"node-v{NODE_VERSION}-darwin-x64", "bin", "node"),
-                os.path.join(NODE_PLATFORM_DIR, f"node-v{NODE_VERSION}-darwin-arm64", "bin", "node"),
-            ])
-            
+            expected_bin_paths.extend(
+                [
+                    # Linux paths with both architectures
+                    os.path.join(
+                        NODE_PLATFORM_DIR,
+                        f"node-v{NODE_VERSION}-linux-x64",
+                        "bin",
+                        "node",
+                    ),
+                    os.path.join(
+                        NODE_PLATFORM_DIR,
+                        f"node-v{NODE_VERSION}-linux-arm64",
+                        "bin",
+                        "node",
+                    ),
+                    # macOS paths with both architectures
+                    os.path.join(
+                        NODE_PLATFORM_DIR,
+                        f"node-v{NODE_VERSION}-darwin-x64",
+                        "bin",
+                        "node",
+                    ),
+                    os.path.join(
+                        NODE_PLATFORM_DIR,
+                        f"node-v{NODE_VERSION}-darwin-arm64",
+                        "bin",
+                        "node",
+                    ),
+                ]
+            )
+
             # Special case: if we're on linux/aarch64, also check the extracted directory that uses arm64 in the name
             if SYSTEM == "linux" and MACHINE == "aarch64":
                 expected_bin_paths.append(
-                    os.path.join(parent_dir, "linux", "arm64", f"node-v{NODE_VERSION}-linux-arm64", "bin", "node")
+                    os.path.join(
+                        parent_dir,
+                        "linux",
+                        "arm64",
+                        f"node-v{NODE_VERSION}-linux-arm64",
+                        "bin",
+                        "node",
+                    )
                 )
-            
-            # Special case: check for a location where the tarball might have been extracted 
+
+            # Special case: check for a location where the tarball might have been extracted
             # with a different parent directory structure
             node_version_dir = f"node-v{NODE_VERSION}-{SYSTEM}-{arch_suffix}"
-            expected_bin_paths.extend([
-                os.path.join(parent_dir, node_version_dir, "bin", "node"),  # Extracted to parent dir
-                os.path.join(NODE_PLATFORM_DIR, "node", "bin", "node"),    # Extracted to 'node' subdir
-            ])
+            expected_bin_paths.extend(
+                [
+                    os.path.join(
+                        parent_dir, node_version_dir, "bin", "node"
+                    ),  # Extracted to parent dir
+                    os.path.join(
+                        NODE_PLATFORM_DIR, "node", "bin", "node"
+                    ),  # Extracted to 'node' subdir
+                ]
+            )
 
         logger.debug(f"Checking for Node.js binary in: {expected_bin_paths}")
 
@@ -349,25 +391,31 @@ def download_node():
                     os.chmod(path, 0o755)
                 node_path = path
                 break
-                
+
         # If none found, perform a more exhaustive search
         if not node_path:
-            logger.debug("Binary not found in expected locations, searching recursively...")
+            logger.debug(
+                "Binary not found in expected locations, searching recursively..."
+            )
             node_exe = "node.exe" if SYSTEM == "windows" else "node"
-            
+
             # Search recursively in NODE_PLATFORM_DIR
             for root, dirs, files in os.walk(NODE_PLATFORM_DIR):
                 if node_exe in files:
                     node_path = os.path.join(root, node_exe)
-                    logger.info(f"Found Node.js binary during recursive search: {node_path}")
+                    logger.info(
+                        f"Found Node.js binary during recursive search: {node_path}"
+                    )
                     # Make sure it's executable on Unix
                     if SYSTEM != "windows" and not os.access(node_path, os.X_OK):
                         os.chmod(node_path, 0o755)
                     break
-        
+
         # Final check if we found a valid binary
         if not node_path or not os.path.exists(node_path):
-            error_msg = f"Node.js binary not found after extraction in any expected location"
+            error_msg = (
+                "Node.js binary not found after extraction in any expected location"
+            )
             logger.error(error_msg)
             # Log the directory structure for debugging
             logger.debug(f"Contents of {NODE_PLATFORM_DIR}:")
@@ -445,13 +493,14 @@ def get_cdk_node_requirements():
     Extract the Node.js version requirements from CDK's package.json.
 
     Returns:
-        str: Node.js version requirement string (e.g. ">= 14.15.0"), or None if not found
+        str: Node.js version requirement string (e.g. ">= 20.0.0"), or None if not found
     """
+    MIN_NODE_VERSION = "20.0.0"
     try:
         package_json_path = os.path.join(NODE_MODULES_DIR, "aws-cdk", "package.json")
         if not os.path.exists(package_json_path):
             logger.debug("AWS CDK package.json not found")
-            return None
+            return f">= {MIN_NODE_VERSION}"
 
         with open(package_json_path, "r") as f:
             package_data = json.load(f)
@@ -459,12 +508,18 @@ def get_cdk_node_requirements():
         # Extract Node.js version requirements from the engines field
         node_requirement = package_data.get("engines", {}).get("node")
         if node_requirement:
+            # Enforce minimum Node.js 20
+            min_version = extract_min_from_req(node_requirement)
+            if min_version:
+                min_tuple = tuple(map(int, min_version.split(".")))
+                if min_tuple < (20, 0, 0):
+                    return f">= {MIN_NODE_VERSION}"
             return node_requirement
     except Exception as e:
         logger.debug(f"Error reading CDK Node.js requirements: {e}")
 
     # Default fallback requirement if we can't determine
-    return ">= 14.15.0"  # Conservative default based on recent CDK versions
+    return f">= {MIN_NODE_VERSION}"  # Updated minimum for Node.js LTS
 
 
 def get_supported_nodejs_versions():

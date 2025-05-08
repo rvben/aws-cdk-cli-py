@@ -14,18 +14,18 @@ jobs:
   check-version:
     runs-on: ubuntu-latest
     timeout-minutes: 5  # Set timeout to avoid wasting minutes
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Fetch all tags and history
-      
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
-      
+          node-version: '22'
+
       - name: Get current version from latest tag
         id: current-version
         run: |
@@ -34,14 +34,14 @@ jobs:
           CURRENT_VERSION=${LATEST_TAG#v}  # Remove the v prefix
           echo "current_version=${CURRENT_VERSION}" >> $GITHUB_OUTPUT
           echo "Current version from git tag: ${CURRENT_VERSION}"
-      
+
       - name: Check for new CDK version
         id: check-version
         run: |
           LATEST_VERSION=$(npm view aws-cdk version)
           echo "latest_version=${LATEST_VERSION}" >> $GITHUB_OUTPUT
           echo "Latest version: ${LATEST_VERSION}"
-          
+
           if [ "${{ steps.current-version.outputs.current_version }}" != "${LATEST_VERSION}" ]; then
             echo "has_new_version=true" >> $GITHUB_OUTPUT
             echo "New version detected: ${LATEST_VERSION}"
@@ -49,25 +49,25 @@ jobs:
             echo "has_new_version=false" >> $GITHUB_OUTPUT
             echo "No new version detected"
           fi
-      
+
       # Early exit if no new version
       - name: Exit if no new version
         if: steps.check-version.outputs.has_new_version != 'true'
         run: echo "No new version detected. Exiting." && exit 0
-      
+
       # Only runs these steps if a new version is detected
       - name: Configure Git
         if: steps.check-version.outputs.has_new_version == 'true'
         run: |
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
-      
+
       - name: Create and push tag
         if: steps.check-version.outputs.has_new_version == 'true'
         run: |
           NEW_VERSION="${{ steps.check-version.outputs.latest_version }}"
           echo "Creating tag v${NEW_VERSION}"
-          
+
           # Create and push the tag with PAT to trigger other workflows
           git tag -a "v${NEW_VERSION}" -m "AWS CDK version ${NEW_VERSION}"
           git push https://${{ secrets.GH_PAT }}@github.com/${GITHUB_REPOSITORY}.git "v${NEW_VERSION}"
@@ -88,8 +88,8 @@ jobs:
               "ref": "refs/tags/v'$VERSION'",
               "inputs": {"version": "'$VERSION'"}
             }'
-      
+
       - name: Create Release Info
         if: steps.check-version.outputs.has_new_version == 'true'
         run: |
-          echo "::notice::Created new tag v${{ steps.check-version.outputs.latest_version }} for AWS CDK update" 
+          echo "::notice::Created new tag v${{ steps.check-version.outputs.latest_version }} for AWS CDK update"

@@ -53,7 +53,7 @@ def detect_platform():
         # Important: Always use 'arm64' for consistency with Node.js distributions
         # This is a critical change to standardize on one directory name
         machine = "arm64"
-        
+
         # Still store both names in environment for compatibility
         os.environ["AWS_CDK_CLI_ARM64"] = "arm64"
         os.environ["AWS_CDK_CLI_AARCH64"] = "aarch64"

@@ -10,6 +10,7 @@ import sys
 import re
 import datetime
 
+
 def validate_version(version: str, name: str) -> None:
     """Validate version string as x.y.z or x.y.z.n; exit on failure."""
     pattern = r"^\d+\.\d+\.\d+(?:\.\d+)?$"
@@ -18,6 +19,7 @@ def validate_version(version: str, name: str) -> None:
         print(f"Error: Invalid {name} format: {version}")
         print(f"{name.capitalize()} must be in the format {example}")
         sys.exit(1)
+
 
 # Get the CDK version from the command-line argument or environment variable
 cdk_version = None
@@ -40,7 +42,7 @@ if not cdk_version:
     sys.exit(1)
 
 # Strip leading 'v' if present
-if cdk_version.startswith('v'):
+if cdk_version.startswith("v"):
     cdk_version = cdk_version[1:]
 
 validate_version(cdk_version, "CDK version")
@@ -50,7 +52,7 @@ wrapper_version = os.environ.get("WRAPPER_VERSION", cdk_version)
 print(f"Using wrapper version: {wrapper_version}")
 
 # Strip leading 'v' if present
-if wrapper_version.startswith('v'):
+if wrapper_version.startswith("v"):
     wrapper_version = wrapper_version[1:]
 
 validate_version(wrapper_version, "wrapper version")

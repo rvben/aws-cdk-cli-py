@@ -23,17 +23,17 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
-          
+          node-version: '22'
+
       - name: Get version from tag or input
         id: get_version
         shell: bash
@@ -47,12 +47,12 @@ jobs:
           fi
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "Building for version: ${VERSION}"
-      
+
       - name: Install uv
         shell: bash
         run: |
           pip install uv
-      
+
       - name: Run tests with make
         shell: bash
         env:
@@ -62,7 +62,7 @@ jobs:
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
             choco install make
           fi
-          
+
           # Run tests
           make test
 
@@ -70,22 +70,22 @@ jobs:
     name: Build and publish package
     needs: test  # Only run after tests pass on all platforms
     runs-on: ubuntu-latest
-    
+
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Get all tags for proper versioning
-      
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
-          
+          node-version: '22'
+
       - name: Get version from tag or input
         id: get_version
         run: |
@@ -98,31 +98,31 @@ jobs:
           fi
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "Building for version: ${VERSION}"
-      
+
       - name: Install build dependencies
         run: |
           pip install uv twine
-          
+
       - name: Build package with make
         env:
           CDK_VERSION: ${{ steps.get_version.outputs.version }}
         run: |
           echo "Building with CDK version $CDK_VERSION"
           make build
-          
+
       - name: Upload package as artifact
         uses: actions/upload-artifact@v4
         with:
           name: dist
           path: dist/
-          
+
       - name: Publish to Test PyPI with make
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.TEST_PYPI_API_TOKEN }}
         run: |
           make publish-test
-          
+
       - name: Publish to PyPI with make
         if: success()  # Only run if all previous steps succeeded
         env:
@@ -130,4 +130,4 @@ jobs:
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
           CDK_VERSION: ${{ steps.get_version.outputs.version }}
         run: |
-          make publish-prod 
+          make publish-prod
