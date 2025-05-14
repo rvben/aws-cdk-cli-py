@@ -77,6 +77,10 @@ def run_cdk_command(
     process_env = os.environ.copy()
     process_env.update(env)
 
+    # Always disable CDK version check unless user explicitly overrides
+    if "CDK_DISABLE_VERSION_CHECK" not in process_env:
+        process_env["CDK_DISABLE_VERSION_CHECK"] = "1"
+
     # Add PATH to ensure Node.js can find any needed binaries
     node_bin_dir = os.path.dirname(NODE_BIN_PATH)
     if "PATH" in process_env:

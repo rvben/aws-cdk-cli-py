@@ -228,6 +228,10 @@ def run_cdk(args):
         env["JSII_SILENCE_WARNING_UNTESTED_NODE_VERSION"] = "1"
         logger.debug("Silencing Node.js version compatibility warnings")
 
+    # Always disable CDK version check unless user explicitly overrides
+    if "CDK_DISABLE_VERSION_CHECK" not in env:
+        env["CDK_DISABLE_VERSION_CHECK"] = "1"
+
     # Run the command
     try:
         return subprocess.call(cmd, env=env)

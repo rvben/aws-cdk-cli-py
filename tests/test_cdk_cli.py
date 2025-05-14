@@ -458,32 +458,3 @@ def test_platform_specific_binaries():
     if system != "windows":
         os.chmod(node_binary, 0o755)
         assert os.access(str(node_binary), os.X_OK), "Node.js binary is not executable"
-
-
-def test_upgrade_block_line_split_bug():
-    """
-    Test that splitting and joining lines introduces a visual bug in the upgrade block
-    when the version line is split across two lines (as can happen in some environments).
-    """
-    # Simulate the original output as a single string, with a line break inside the version line
-    original_output = (
-        "*****************************************************\n"
-        "*** Newer version of CDK is available [2.1012.0]  ***\n"
-        "*** Upgrade recommended (npm install -g aws-cdk)  ***\n"
-        "*****************************************************\n"
-    )
-
-    # Current filtering logic (splitlines + join)
-    lines = original_output.splitlines()
-    filtered_lines = [line for line in lines if "npm install -g aws-cdk" not in line]
-    filtered_output = "\n".join(filtered_lines)
-
-    # The bug: the version line is now split across two lines
-    assert (
-        "*** Newer version of CDK is available [2.1012.0\n] ***" in filtered_output
-        or (
-            "*** Newer version of CDK is available [2.1012.0" in filtered_output
-            and "] ***" in filtered_output
-        )
-    ), "Bug: The version line is split across two lines!"
-    print("Filtered output with bug (split version line):\n", filtered_output)
