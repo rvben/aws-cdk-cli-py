@@ -212,7 +212,8 @@ def download_node():
 
     # Extract the archive
     try:
-        extract_dir = os.path.dirname(NODE_PLATFORM_DIR)
+        # Extract to NODE_PLATFORM_DIR so the tarball's folder goes inside darwin/arm64/
+        extract_dir = NODE_PLATFORM_DIR
         os.makedirs(extract_dir, exist_ok=True)
 
         logger.debug(f"Extracting Node.js archive to {extract_dir}")
@@ -403,7 +404,8 @@ def download_node():
                         logger.debug(f"  File: {f}")
             return False, error_msg
 
-        return True, None
+        # Return the actual path to the Node.js binary
+        return True, node_path
     except Exception as e:
         error_msg = f"Failed to extract Node.js binaries: {e}"
         logger.error(error_msg)
@@ -668,13 +670,13 @@ def setup_nodejs():
     force_download = os.environ.get("AWS_CDK_CLI_USE_DOWNLOADED_NODE") is not None
     if force_download:
         logger.info("Using downloaded Node.js")
-        success, result = download_node()
+        success, node_path = download_node()
         if success:
-            logger.debug(f"Successfully downloaded Node.js to {NODE_BIN_PATH}")
-            return True, NODE_BIN_PATH
+            logger.debug(f"Successfully downloaded Node.js to {node_path}")
+            return True, node_path
         else:
-            logger.error(f"Failed to download Node.js: {result}")
-            return False, result
+            logger.error(f"Failed to download Node.js: {node_path}")
+            return False, node_path
 
     # Try Bun only if explicitly requested
     use_bun = os.environ.get("AWS_CDK_CLI_USE_BUN") is not None
@@ -746,13 +748,13 @@ def setup_nodejs():
 
     # If no suitable runtime found yet, download Node.js
     logger.info("No suitable JavaScript runtime found. Downloading Node.js...")
-    success, result = download_node()
+    success, node_path = download_node()
     if success:
-        logger.debug(f"Successfully downloaded Node.js to {NODE_BIN_PATH}")
-        return True, NODE_BIN_PATH
+        logger.debug(f"Successfully downloaded Node.js to {node_path}")
+        return True, node_path
     else:
-        logger.error(f"Failed to download Node.js: {result}")
-        return False, result
+        logger.error(f"Failed to download Node.js: {node_path}")
+        return False, node_path
 
 
 def find_system_bun():

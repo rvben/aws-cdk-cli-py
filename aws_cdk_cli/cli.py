@@ -10,6 +10,7 @@ import logging
 import argparse
 from . import runtime
 from . import version
+from .constants import NODE_VERSION
 import shutil
 import re
 from typing import List, Tuple, Optional, Union
@@ -218,7 +219,7 @@ def create_node_symlink():
         logger.debug("Looking for Node.js binary in cache and other locations")
         cache_dir = os.path.join(os.path.expanduser("~"), ".cache", "aws-cdk-cli")
         cached_binary = os.path.join(
-            cache_dir, f"node-v{runtime.NODE_VERSION}", "bin", "node"
+            cache_dir, f"node-v{NODE_VERSION}", "bin", "node"
         )
         if os.path.exists(cached_binary) and os.access(cached_binary, os.X_OK):
             node_binary = cached_binary
