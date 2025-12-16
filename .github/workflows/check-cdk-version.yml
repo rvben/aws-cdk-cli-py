@@ -39,15 +39,26 @@ jobs:
         id: check-version
         run: |
           LATEST_VERSION=$(npm view aws-cdk version)
+          CURRENT_VERSION="${{ steps.current-version.outputs.current_version }}"
           echo "latest_version=${LATEST_VERSION}" >> $GITHUB_OUTPUT
-          echo "Latest version: ${LATEST_VERSION}"
+          echo "Latest version from npm: ${LATEST_VERSION}"
+          echo "Current version from tag: ${CURRENT_VERSION}"
 
-          if [ "${{ steps.current-version.outputs.current_version }}" != "${LATEST_VERSION}" ]; then
-            echo "has_new_version=true" >> $GITHUB_OUTPUT
-            echo "New version detected: ${LATEST_VERSION}"
+          # Use semver for proper semantic version comparison
+          IS_GREATER=$(npx --yes semver "$LATEST_VERSION" --range ">$CURRENT_VERSION" || echo "")
+
+          if [ -n "$IS_GREATER" ]; then
+            # Double-check: ensure tag doesn't already exist (race condition safeguard)
+            if git rev-parse "v${LATEST_VERSION}" >/dev/null 2>&1; then
+              echo "has_new_version=false" >> $GITHUB_OUTPUT
+              echo "Tag v${LATEST_VERSION} already exists, skipping"
+            else
+              echo "has_new_version=true" >> $GITHUB_OUTPUT
+              echo "New version detected: ${LATEST_VERSION} > ${CURRENT_VERSION}"
+            fi
           else
             echo "has_new_version=false" >> $GITHUB_OUTPUT
-            echo "No new version detected"
+            echo "No new version (current: ${CURRENT_VERSION}, npm: ${LATEST_VERSION})"
           fi
 
       # Early exit if no new version
