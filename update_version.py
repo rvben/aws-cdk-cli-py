@@ -57,16 +57,16 @@ if wrapper_version.startswith("v"):
 
 validate_version(wrapper_version, "wrapper version")
 
-# Extract the Node.js version from installer.py
+# Extract the Node.js version from constants.py
 node_version = None
-with open("aws_cdk_cli/installer.py", "r") as f:
+with open("aws_cdk_cli/constants.py", "r") as f:
     for line in f:
         if line.startswith("NODE_VERSION ="):
             node_version = line.split("=")[1].strip().strip("\"'")
             break
 
 if not node_version:
-    print("Error: Could not extract Node.js version from installer.py")
+    print("Error: Could not extract Node.js version from constants.py")
     sys.exit(1)
 
 # Get current date information for build metadata

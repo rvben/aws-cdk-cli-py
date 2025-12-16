@@ -8,45 +8,20 @@ It downloads Node.js binaries for the current platform if needed.
 import os
 import sys
 import logging
-import platform
 import tempfile
 import zipfile
 import tarfile
 import aws_cdk_cli.download as download
+
+import hashlib
+from .constants import NODE_VERSION, NODE_URLS, NODE_CHECKSUMS, SYSTEM, MACHINE
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 # Constants
-NODE_VERSION = "22.14.0"  # LTS version
 NODE_BINARIES_DIR = os.path.join(os.path.dirname(__file__), "node_binaries")
-
-# Platform detection (duplicated from aws_cdk.__init__)
-SYSTEM = platform.system().lower()
-MACHINE = platform.machine().lower()
-
-# Map system and machine to Node.js download URLs
-NODE_URLS = {
-    "darwin": {
-        "x86_64": f"https://nodejs.org/dist/v{NODE_VERSION}/node-v{NODE_VERSION}-darwin-x64.tar.gz",
-        "arm64": f"https://nodejs.org/dist/v{NODE_VERSION}/node-v{NODE_VERSION}-darwin-arm64.tar.gz",
-    },
-    "linux": {
-        "x86_64": f"https://nodejs.org/dist/v{NODE_VERSION}/node-v{NODE_VERSION}-linux-x64.tar.gz",
-        "arm64": f"https://nodejs.org/dist/v{NODE_VERSION}/node-v{NODE_VERSION}-linux-arm64.tar.gz",
-    },
-    "windows": {
-        "x86_64": f"https://nodejs.org/dist/v{NODE_VERSION}/node-v{NODE_VERSION}-win-x64.zip",
-    },
-}
-
-# Normalize machine architecture
-if MACHINE in ("amd64", "x86_64"):
-    MACHINE = "x86_64"
-elif MACHINE in ("arm64", "aarch64"):
-    # Always use arm64 for consistency with Node.js
-    MACHINE = "arm64"
 
 # Get package directory
 PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -156,6 +131,29 @@ def is_node_installed():
     return os.path.exists(node_path)
 
 
+def verify_checksum(file_path: str, expected_checksum: str) -> bool:
+    """Verify the downloaded file against expected SHA256 checksum."""
+    if not expected_checksum:
+        logger.warning("No checksum provided for verification, skipping")
+        return True
+
+    try:
+        with open(file_path, "rb") as f:
+            file_hash = hashlib.sha256(f.read()).hexdigest()
+
+        if file_hash == expected_checksum:
+            logger.debug("Checksum verification passed")
+            return True
+        else:
+            logger.error(
+                f"Checksum verification failed. Expected: {expected_checksum}, Got: {file_hash}"
+            )
+            return False
+    except Exception as e:
+        logger.error(f"Error verifying checksum: {e}")
+        return False
+
+
 def download_node():
     """Download Node.js binaries for the current platform."""
     try:
@@ -163,6 +161,9 @@ def download_node():
     except KeyError:
         logger.error(f"Unsupported platform: {SYSTEM}-{MACHINE}")
         return False
+
+    # Get expected checksum for verification
+    expected_checksum = NODE_CHECKSUMS.get(SYSTEM, {}).get(MACHINE)
 
     logger.info(f"Downloading Node.js v{NODE_VERSION} for {SYSTEM}-{MACHINE}...")
 
@@ -176,8 +177,13 @@ def download_node():
         # Download with progress bar
         download.download_file(url=node_url, file_path=temp_file.name)
 
-        # Close the file before extracting (important for Windows)
+        # Close the file before verifying/extracting (important for Windows)
         temp_file.close()
+
+        # Verify checksum before extraction
+        if expected_checksum and not verify_checksum(temp_file.name, expected_checksum):
+            logger.error("Downloaded file failed checksum verification")
+            return False
 
         # Extract the Node.js binaries
         if node_url.endswith(".zip"):

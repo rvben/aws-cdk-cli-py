@@ -3,7 +3,6 @@
 
 import os
 import sys
-import platform
 import subprocess
 import shutil
 import json
@@ -14,34 +13,18 @@ from setuptools.command.develop import develop
 from setuptools.command.build_py import build_py
 from setuptools.command.sdist import sdist
 
-# Constants
-NODE_VERSION = "22.14.0"  # LTS version
+# Read constants from constants.py to avoid duplication
+# We can't import directly since the package isn't installed yet
+_constants = {}
+with open(os.path.join("aws_cdk_cli", "constants.py"), "r") as f:
+    exec(f.read(), _constants)
+
+NODE_VERSION = _constants["NODE_VERSION"]
+NODE_URLS = _constants["NODE_URLS"]
+SYSTEM = _constants["SYSTEM"]
+MACHINE = _constants["MACHINE"]
+
 NODE_BINARIES_DIR = os.path.join("aws_cdk_cli", "node_binaries")
-
-# Platform detection
-SYSTEM = platform.system().lower()
-MACHINE = platform.machine().lower()
-
-# Map system and machine to Node.js download URLs
-NODE_URLS = {
-    "darwin": {
-        "x86_64": f"https://nodejs.org/dist/v{NODE_VERSION}/node-v{NODE_VERSION}-darwin-x64.tar.gz",
-        "arm64": f"https://nodejs.org/dist/v{NODE_VERSION}/node-v{NODE_VERSION}-darwin-arm64.tar.gz",
-    },
-    "linux": {
-        "x86_64": f"https://nodejs.org/dist/v{NODE_VERSION}/node-v{NODE_VERSION}-linux-x64.tar.gz",
-        "aarch64": f"https://nodejs.org/dist/v{NODE_VERSION}/node-v{NODE_VERSION}-linux-arm64.tar.gz",
-    },
-    "windows": {
-        "x86_64": f"https://nodejs.org/dist/v{NODE_VERSION}/node-v{NODE_VERSION}-win-x64.zip",
-    },
-}
-
-# Normalize machine architecture
-if MACHINE in ("amd64", "x86_64"):
-    MACHINE = "x86_64"
-elif MACHINE in ("arm64", "aarch64"):
-    MACHINE = "aarch64" if SYSTEM == "linux" else "arm64"
 
 
 # Read the long description from README.md

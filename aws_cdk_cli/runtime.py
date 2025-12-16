@@ -1,32 +1,18 @@
 """Runtime utilities for aws-cdk-cli package."""
 
 import os
-import platform
 import subprocess
 import logging
 import shutil
 from typing import Optional
+
+from .constants import CDK_PACKAGE_NAME, SYSTEM
 
 # Configure logging
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger("aws-cdk-runtime")
-
-# Constants
-NODE_VERSION = "22.14.0"  # LTS version
-CDK_PACKAGE_NAME = "aws-cdk"
-
-# Platform detection
-SYSTEM = platform.system().lower()
-MACHINE = platform.machine().lower()
-
-# Normalize machine architecture
-if MACHINE in ("amd64", "x86_64"):
-    MACHINE = "x86_64"
-elif MACHINE in ("arm64", "aarch64"):
-    # Always use arm64 for consistency with Node.js
-    MACHINE = "arm64"
 
 
 def get_package_dir():
@@ -170,10 +156,23 @@ def ensure_node_installed():
     from .installer import setup_nodejs
 
     logger.debug("Setting up JavaScript runtime")
+
+    # Check if Node.js needs to be downloaded
+    from . import is_node_installed
+
+    needs_download = not is_node_installed()
+
+    if needs_download:
+        logger.info(
+            "First-time setup: Downloading Node.js runtime (one-time operation)..."
+        )
+
     success, result = setup_nodejs()
 
     if success:
         logger.debug(f"Using JavaScript runtime: {result}")
+        if needs_download:
+            logger.info("Node.js runtime downloaded successfully")
         return result
     else:
         logger.error(f"Failed to set up JavaScript runtime: {result}")
@@ -193,15 +192,24 @@ def run_cdk(args):
     cdk_path = get_cdk_path()
     if cdk_path is None:
         logger.error("CDK CLI not found in the package.")
+        logger.error(
+            "This usually means the package was not built correctly or CDK was not bundled."
+        )
+        logger.error(
+            "Please reinstall the package: pip install --force-reinstall aws-cdk-cli"
+        )
         return 1
 
     # Create symlink to Node.js:
     # 1. Always when using downloaded Node.js (not system Node.js)
     # 2. When explicitly requested via environment variable
     system_node_path = get_system_node_path()
-    using_system_nodejs = system_node_path and os.path.samefile(
-        js_runtime_path, system_node_path
-    )
+    using_system_nodejs = False
+    if system_node_path and os.path.exists(js_runtime_path):
+        try:
+            using_system_nodejs = os.path.samefile(js_runtime_path, system_node_path)
+        except (OSError, FileNotFoundError):
+            using_system_nodejs = False
     explicitly_requested = os.environ.get("AWS_CDK_CLI_CREATE_NODE_SYMLINK") == "1"
 
     if (not using_system_nodejs) or explicitly_requested:

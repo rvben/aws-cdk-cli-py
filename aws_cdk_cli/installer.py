@@ -19,57 +19,25 @@ import urllib.error
 # Import our custom modules instead of external dependencies
 from . import semver_helper as semver
 from . import download
+from .constants import (
+    NODE_VERSION,
+    MIN_BUN_VERSION,
+    NODE_URLS,
+    NODE_CHECKSUMS,
+    CACHE_DIR,
+    SYSTEM,
+    MACHINE,
+)
 
 from aws_cdk_cli import (
     NODE_MODULES_DIR,
     NODE_PLATFORM_DIR,
     NODE_BIN_PATH,
-    SYSTEM,
-    MACHINE,
     is_cdk_installed,
     is_node_installed,
 )
 
 logger = logging.getLogger(__name__)
-
-# Node.js version to use
-NODE_VERSION = "22.14.0"  # LTS version
-
-# Minimum Bun version required for --eval support
-MIN_BUN_VERSION = "1.1.0"
-
-# Map system and machine to Node.js download URLs
-NODE_URLS = {
-    "darwin": {
-        "x86_64": f"https://nodejs.org/dist/v{NODE_VERSION}/node-v{NODE_VERSION}-darwin-x64.tar.gz",
-        "arm64": f"https://nodejs.org/dist/v{NODE_VERSION}/node-v{NODE_VERSION}-darwin-arm64.tar.gz",
-    },
-    "linux": {
-        "x86_64": f"https://nodejs.org/dist/v{NODE_VERSION}/node-v{NODE_VERSION}-linux-x64.tar.gz",
-        "arm64": f"https://nodejs.org/dist/v{NODE_VERSION}/node-v{NODE_VERSION}-linux-arm64.tar.gz",
-    },
-    "windows": {
-        "x86_64": f"https://nodejs.org/dist/v{NODE_VERSION}/node-v{NODE_VERSION}-win-x64.zip",
-    },
-}
-
-# Known checksums for Node.js binaries - for verification
-NODE_CHECKSUMS = {
-    "darwin": {
-        "x86_64": "e5fa00fd1be09b03c778d1f76ae93502216a618b8ff0a254b076844bd7d555af",
-        "arm64": "a20fb83c8d569dd1294a3b604e3696fabfe1f3169c562b7e962d6bd1f291e09b",
-    },
-    "linux": {
-        "x86_64": "2b4e1d21eef715d126b99b05c089c7ae518c8ae60f2b2607e68484d3bb1eb083",
-        "arm64": "5693ca1e9486868b9c5d8ba0237d851b97b5c48c4e24d93ad04ee8d7914826b4",
-    },
-    "windows": {
-        "x86_64": "fe1a592a8bf0ef555d59cdcea29fd90338e7e5dc677bcc8efafe0ffced0a7aee",
-    },
-}
-
-# Define cache directory for storing downloaded files
-CACHE_DIR = os.path.join(os.path.expanduser("~"), ".cache", "aws-cdk-cli")
 
 
 def check_npm_available():
@@ -165,6 +133,9 @@ def download_node():
         logger.error(error_msg)
         return False, error_msg
 
+    # Get expected checksum for verification
+    expected_checksum = NODE_CHECKSUMS.get(SYSTEM, {}).get(MACHINE)
+
     logger.info(f"Downloading Node.js v{NODE_VERSION} for {SYSTEM}-{MACHINE}...")
 
     # Create node_binaries directory if it doesn't exist
@@ -190,6 +161,10 @@ def download_node():
         try:
             # Download copy
             download.download_file(url=node_url, file_path=temp_file)
+
+            # Verify checksum before caching
+            if expected_checksum and not verify_node_binary(temp_file, expected_checksum):
+                raise ValueError("Downloaded file failed checksum verification")
 
             # Verify the download
             if not is_valid_archive(temp_file):
@@ -443,19 +418,9 @@ def find_system_nodejs():
         str: Path to the Node.js executable, or None if not found
     """
     try:
-        # Check if node is in PATH
-        if SYSTEM == "windows":
-            node_cmd = "where.exe node"
-        else:
-            node_cmd = "which node"
-
-        result = subprocess.run(node_cmd, shell=True, capture_output=True, text=True)
-        if result.returncode == 0:
-            node_path = result.stdout.strip().split("\n")[
-                0
-            ]  # Take the first one if multiple
-            if os.path.exists(node_path) and os.access(node_path, os.X_OK):
-                return node_path
+        node_path = shutil.which("node")
+        if node_path and os.path.exists(node_path) and os.access(node_path, os.X_OK):
+            return node_path
     except Exception as e:
         logger.debug(f"Error finding system Node.js: {e}")
 
@@ -798,19 +763,9 @@ def find_system_bun():
         str: Path to the Bun executable, or None if not found
     """
     try:
-        # Check if bun is in PATH
-        if SYSTEM == "windows":
-            bun_cmd = "where.exe bun"
-        else:
-            bun_cmd = "which bun"
-
-        result = subprocess.run(bun_cmd, shell=True, capture_output=True, text=True)
-        if result.returncode == 0:
-            bun_path = result.stdout.strip().split("\n")[
-                0
-            ]  # Take the first one if multiple
-            if os.path.exists(bun_path) and os.access(bun_path, os.X_OK):
-                return bun_path
+        bun_path = shutil.which("bun")
+        if bun_path and os.path.exists(bun_path) and os.access(bun_path, os.X_OK):
+            return bun_path
     except Exception as e:
         logger.debug(f"Error finding system Bun: {e}")
 

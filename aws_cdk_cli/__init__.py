@@ -168,8 +168,8 @@ def get_cdk_version():
             with open(metadata_path, "r") as f:
                 metadata = json.load(f)
                 return metadata.get("cdk_version")
-        except Exception:
-            pass
+        except (IOError, json.JSONDecodeError) as e:
+            logger.debug(f"Failed to read CDK metadata: {e}")
 
     # Fallback to package.json
     try:
@@ -178,8 +178,8 @@ def get_cdk_version():
             with open(package_json_path, "r") as f:
                 data = json.load(f)
                 return data.get("version")
-    except Exception:
-        pass
+    except (IOError, json.JSONDecodeError) as e:
+        logger.debug(f"Failed to read CDK package.json: {e}")
 
     return None
 
@@ -196,8 +196,8 @@ def get_node_version():
             with open(metadata_path, "r") as f:
                 metadata = json.load(f)
                 return metadata.get("node_version")
-        except Exception:
-            pass
+        except (IOError, json.JSONDecodeError) as e:
+            logger.debug(f"Failed to read Node.js metadata: {e}")
 
     # Fallback to running node --version
     try:
@@ -209,8 +209,8 @@ def get_node_version():
             if version.startswith("v"):
                 version = version[1:]
             return version
-    except Exception:
-        pass
+    except (subprocess.SubprocessError, OSError) as e:
+        logger.debug(f"Failed to get Node.js version: {e}")
 
     return None
 
@@ -222,8 +222,8 @@ def get_license_text(component):
         try:
             with open(license_path, "r", encoding="utf-8") as f:
                 return f.read()
-        except Exception:
-            pass
+        except IOError as e:
+            logger.debug(f"Failed to read license for {component}: {e}")
     return None
 
 
