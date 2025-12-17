@@ -11,12 +11,21 @@ import logging
 import tempfile
 import zipfile
 import tarfile
-import aws_cdk_cli.download as download
-
 import hashlib
 from pathlib import Path
-from .constants import NODE_VERSION, NODE_URLS, NODE_CHECKSUMS, SYSTEM, MACHINE
-from .installer import PathTraversalError
+
+# Handle imports for both module and standalone script execution
+try:
+    from .constants import NODE_VERSION, NODE_URLS, NODE_CHECKSUMS, SYSTEM, MACHINE
+    from . import download
+except ImportError:
+    from constants import NODE_VERSION, NODE_URLS, NODE_CHECKSUMS, SYSTEM, MACHINE
+    import download
+
+
+class PathTraversalError(Exception):
+    """Raised when a path traversal attack is detected in an archive."""
+    pass
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
