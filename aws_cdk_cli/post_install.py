@@ -107,7 +107,7 @@ def create_license_notices():
                     IN THE SOFTWARE.
                 """.strip()
                 )
-    except Exception as e:
+    except OSError as e:
         logger.warning(f"Failed to create license notices: {e}")
 
 
@@ -149,8 +149,8 @@ def verify_checksum(file_path: str, expected_checksum: str) -> bool:
                 f"Checksum verification failed. Expected: {expected_checksum}, Got: {file_hash}"
             )
             return False
-    except Exception as e:
-        logger.error(f"Error verifying checksum: {e}")
+    except OSError as e:
+        logger.error(f"Error reading file for checksum: {e}")
         return False
 
 
@@ -206,7 +206,7 @@ def download_node():
 
         logger.info(f"Node.js binaries downloaded and extracted to {extract_dir}")
         return True
-    except Exception as e:
+    except (download.DownloadError, zipfile.BadZipFile, tarfile.TarError, OSError) as e:
         logger.error(f"Failed to download Node.js: {e}")
         return False
     finally:
@@ -217,7 +217,7 @@ def download_node():
         # On Windows, the file might still be in use, so try to delete it but don't fail if we can't
         try:
             os.unlink(temp_file.name)
-        except Exception as e:
+        except OSError as e:
             logger.warning(f"Could not delete temporary file {temp_file.name}: {e}")
             # This is not a critical error, so we can continue
 
@@ -268,7 +268,7 @@ def main():
 
         logger.info("Post-installation completed successfully.")
         return 0
-    except Exception as e:
+    except (OSError, download.DownloadError, KeyboardInterrupt) as e:
         logger.error(f"Post-installation failed: {e}")
         return 1
 

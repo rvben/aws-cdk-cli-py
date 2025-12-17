@@ -2,11 +2,18 @@
 Simple file download functionality.
 """
 
-import urllib.request
 import os
+import urllib.error
+import urllib.request
 
 
-def download_file(url, file_path):
+class DownloadError(Exception):
+    """Raised when a file download fails."""
+
+    pass
+
+
+def download_file(url: str, file_path: str) -> str:
     """
     Download a file from a URL.
 
@@ -18,17 +25,33 @@ def download_file(url, file_path):
         The path to the downloaded file
 
     Raises:
-        Exception: If download fails
+        DownloadError: If download fails due to network issues
+        OSError: If file cannot be written
     """
     try:
-        # Download the file
         with urllib.request.urlopen(url) as response:
             with open(file_path, "wb") as f:
                 f.write(response.read())
-    except Exception as e:
-        # Clean up partially downloaded file
-        if os.path.exists(file_path):
-            os.unlink(file_path)
-        raise e
+    except urllib.error.URLError as e:
+        # Network-related errors (DNS, connection refused, timeout, etc.)
+        _cleanup_partial_download(file_path)
+        raise DownloadError(f"Failed to download {url}: {e}") from e
+    except urllib.error.HTTPError as e:
+        # HTTP errors (404, 500, etc.)
+        _cleanup_partial_download(file_path)
+        raise DownloadError(f"HTTP error downloading {url}: {e.code} {e.reason}") from e
+    except OSError:
+        # File system errors (permission denied, disk full, etc.)
+        _cleanup_partial_download(file_path)
+        raise  # Re-raise OSError as-is for caller to handle
 
     return file_path
+
+
+def _cleanup_partial_download(file_path: str) -> None:
+    """Remove a partially downloaded file if it exists."""
+    try:
+        if os.path.exists(file_path):
+            os.unlink(file_path)
+    except OSError:
+        pass  # Best effort cleanup

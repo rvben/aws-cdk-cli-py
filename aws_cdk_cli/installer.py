@@ -40,8 +40,18 @@ from aws_cdk_cli import (
 logger = logging.getLogger(__name__)
 
 
-def check_npm_available():
-    """Check if npm is available on the system."""
+class PathTraversalError(Exception):
+    """Raised when a path traversal attack is detected in an archive."""
+
+    pass
+
+
+def check_npm_available() -> bool:
+    """Check if npm is available on the system.
+
+    Returns:
+        True if npm is available and executable, False otherwise.
+    """
     try:
         subprocess.run(
             ["npm", "--version"],
@@ -54,8 +64,12 @@ def check_npm_available():
         return False
 
 
-def get_latest_cdk_version():
-    """Get the latest AWS CDK version from npm registry."""
+def get_latest_cdk_version() -> str | None:
+    """Get the latest AWS CDK version from npm registry.
+
+    Returns:
+        The version string of the latest CDK, or None if unavailable.
+    """
     try:
         # First try to get it from npm
         version = subprocess.check_output(
@@ -85,15 +99,23 @@ def get_latest_cdk_version():
             ) as response:
                 data = json.loads(response.read().decode("utf-8"))
                 return data.get("version")
-        except (urllib.error.HTTPError, Exception):
+        except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError, OSError):
             pass
 
     logger.error("Failed to get latest AWS CDK version from npm")
     return None
 
 
-def verify_node_binary(file_path, expected_checksum):
-    """Verify the downloaded Node.js binary against expected checksum."""
+def verify_node_binary(file_path: str, expected_checksum: str | None) -> bool:
+    """Verify the downloaded Node.js binary against expected checksum.
+
+    Args:
+        file_path: Path to the downloaded file.
+        expected_checksum: Expected SHA256 checksum hex string.
+
+    Returns:
+        True if checksum matches or verification is skipped, False otherwise.
+    """
     # Skip verification in CI environment if configured
     if (
         os.environ.get("CI") == "true"
@@ -118,13 +140,18 @@ def verify_node_binary(file_path, expected_checksum):
                 f"Checksum verification failed. Expected: {expected_checksum}, Got: {file_hash}"
             )
             return False
-    except Exception as e:
-        logger.error(f"Error verifying checksum: {e}")
+    except OSError as e:
+        logger.error(f"Error reading file for checksum: {e}")
         return False
 
 
-def download_node():
-    """Download Node.js binaries for the current platform."""
+def download_node() -> tuple[bool, str]:
+    """Download Node.js binaries for the current platform.
+
+    Returns:
+        A tuple of (success, result) where success is True if download succeeded
+        and result is the path to the node binary, or an error message on failure.
+    """
     try:
         # We're now standardized on arm64 so no need for special handling
         node_url = NODE_URLS[SYSTEM][MACHINE]
@@ -177,15 +204,20 @@ def download_node():
             shutil.copy2(temp_file, cached_archive)
             logger.debug(f"Cached Node.js archive at {cached_archive}")
             return cached_archive
-        except Exception as e:
+        except (download.DownloadError, ValueError, OSError) as e:
             logger.error(f"Error downloading Node.js: {e}")
-            if os.path.exists(temp_file):
+            # Clean up temp file on error (TOCTOU-safe: try to delete, ignore if missing)
+            try:
                 os.unlink(temp_file)
+            except FileNotFoundError:
+                pass
             raise
         finally:
-            # Clean up the temporary file
-            if os.path.exists(temp_file):
+            # Clean up the temporary file (TOCTOU-safe: try to delete, ignore if missing)
+            try:
                 os.unlink(temp_file)
+            except FileNotFoundError:
+                pass
 
     def is_valid_archive(file_path):
         """Check if the file is a valid archive."""
@@ -199,7 +231,7 @@ def download_node():
                     # Just check if it's a valid tarball by listing files
                     tar_ref.getnames()
             return True
-        except Exception:
+        except (zipfile.BadZipFile, tarfile.TarError, OSError):
             return False
 
     # Try to download a fresh copy if needed
@@ -209,7 +241,7 @@ def download_node():
     else:
         try:
             download_path = download_fresh_copy()
-        except Exception as e:
+        except (download.DownloadError, ValueError, OSError) as e:
             return False, f"Failed to download Node.js: {e}"
 
     # Extract the archive
@@ -225,17 +257,37 @@ def download_node():
         else:
             with tarfile.open(download_path, "r:*") as tar_ref:
 
-                def is_within_directory(directory, target):
-                    abs_directory = os.path.abspath(directory)
-                    abs_target = os.path.abspath(target)
-                    prefix = os.path.commonprefix([abs_directory, abs_target])
-                    return prefix == abs_directory
+                def is_within_directory(directory: str, target: str) -> bool:
+                    """Check if target path is within directory (path traversal protection).
+
+                    Uses pathlib for correct path-level comparison. The previous
+                    implementation using os.path.commonprefix was vulnerable because
+                    commonprefix operates on strings, not paths. For example:
+                    - directory: /home/user/archive
+                    - target: /home/user/archive-evil/file.txt
+                    - commonprefix would return /home/user/archive (WRONG - appears safe)
+
+                    This implementation uses Path.relative_to() which correctly
+                    determines path containment.
+                    """
+                    from pathlib import Path
+
+                    try:
+                        abs_directory = Path(directory).resolve()
+                        abs_target = Path(target).resolve()
+                        # relative_to raises ValueError if target is not relative to directory
+                        abs_target.relative_to(abs_directory)
+                        return True
+                    except (ValueError, OSError):
+                        return False
 
                 def safe_extract(tar, path=".", members=None, *, numeric_owner=False):
                     for member in tar.getmembers():
                         member_path = os.path.join(path, member.name)
                         if not is_within_directory(path, member_path):
-                            raise Exception("Attempted Path Traversal in Tar File")
+                            raise PathTraversalError(
+                                f"Attempted path traversal in tar file: {member.name}"
+                            )
 
                     # Use the 'data' filter parameter if available (Python 3.12+)
                     if sys.version_info >= (3, 12):
@@ -250,10 +302,13 @@ def download_node():
         logger.info(f"Node.js binaries extracted to {NODE_PLATFORM_DIR}")
 
         # If we used a temporary file (not a cached one), delete it
-        if download_path != cached_archive and os.path.exists(download_path):
+        # TOCTOU-safe: try to delete directly, handle exceptions
+        if download_path != cached_archive:
             try:
                 os.unlink(download_path)
-            except Exception as e:
+            except FileNotFoundError:
+                pass  # Already deleted, ignore
+            except OSError as e:
                 logger.warning(f"Could not delete temporary file {download_path}: {e}")
 
         # Verify the binary exists - use a more direct approach
@@ -364,9 +419,13 @@ def download_node():
             if os.path.exists(path) and os.path.isfile(path):
                 logger.info(f"Found Node.js binary at {path}")
                 # Make sure the binary is executable on Unix-like systems
-                if SYSTEM != "windows" and not os.access(path, os.X_OK):
-                    logger.debug(f"Making Node.js binary executable: {path}")
-                    os.chmod(path, 0o755)
+                # TOCTOU-safe: try chmod directly, handle exceptions
+                if SYSTEM != "windows":
+                    try:
+                        os.chmod(path, 0o755)
+                        logger.debug(f"Made Node.js binary executable: {path}")
+                    except OSError as e:
+                        logger.debug(f"Could not chmod binary (may already be executable): {e}")
                 node_path = path
                 break
 
@@ -385,8 +444,12 @@ def download_node():
                         f"Found Node.js binary during recursive search: {node_path}"
                     )
                     # Make sure it's executable on Unix
-                    if SYSTEM != "windows" and not os.access(node_path, os.X_OK):
-                        os.chmod(node_path, 0o755)
+                    # TOCTOU-safe: try chmod directly, handle exceptions
+                    if SYSTEM != "windows":
+                        try:
+                            os.chmod(node_path, 0o755)
+                        except OSError:
+                            pass  # Ignore chmod errors, binary may still be executable
                     break
 
         # Final check if we found a valid binary
@@ -408,24 +471,28 @@ def download_node():
 
         # Return the actual path to the Node.js binary
         return True, node_path
-    except Exception as e:
+    except (zipfile.BadZipFile, tarfile.TarError, OSError, PathTraversalError) as e:
         error_msg = f"Failed to extract Node.js binaries: {e}"
         logger.error(error_msg)
         return False, error_msg
 
 
-def find_system_nodejs():
+def find_system_nodejs() -> str | None:
     """
     Find the Node.js executable on the system PATH and return its path.
 
+    This function wraps the shared implementation in runtime.py for consistency.
+
     Returns:
-        str: Path to the Node.js executable, or None if not found
+        Path to the Node.js executable, or None if not found.
     """
+    from . import runtime
+
     try:
-        node_path = shutil.which("node")
+        node_path = runtime.get_system_node_path()
         if node_path and os.path.exists(node_path) and os.access(node_path, os.X_OK):
             return node_path
-    except Exception as e:
+    except OSError as e:
         logger.debug(f"Error finding system Node.js: {e}")
 
     return None
@@ -451,7 +518,7 @@ def get_nodejs_version(node_path):
             if version.startswith("v"):
                 version = version[1:]
             return version
-    except Exception as e:
+    except (subprocess.SubprocessError, OSError) as e:
         logger.debug(f"Error getting Node.js version: {e}")
 
     return None
@@ -484,7 +551,7 @@ def get_cdk_node_requirements():
                 if min_tuple < (20, 0, 0):
                     return f">= {MIN_NODE_VERSION}"
             return node_requirement
-    except Exception as e:
+    except (OSError, json.JSONDecodeError, ValueError) as e:
         logger.debug(f"Error reading CDK Node.js requirements: {e}")
 
     # Default fallback requirement if we can't determine
@@ -525,7 +592,7 @@ def get_supported_nodejs_versions():
             else:
                 # Single requirement
                 min_version = extract_min_from_req(node_req)
-        except Exception as e:
+        except ValueError as e:
             logger.debug(f"Error parsing Node.js requirement '{node_req}': {e}")
 
     # Conservative default based on current CDK support
@@ -590,7 +657,7 @@ def is_nodejs_compatible(version, requirement_str):
         if hasattr(semver, "satisfies"):
             try:
                 return semver.satisfies(version, requirement_str)
-            except Exception:
+            except ValueError:
                 # If satisfies fails, fall back to other methods
                 pass
 
@@ -640,12 +707,12 @@ def is_nodejs_compatible(version, requirement_str):
         )
         return False
 
-    except Exception as e:
+    except (ValueError, TypeError, AttributeError) as e:
         logger.debug(f"Error checking Node.js compatibility: {e}")
         return False
 
 
-def setup_nodejs():
+def setup_nodejs() -> tuple[bool, str]:
     """
     Find or download a suitable Node.js runtime.
 
@@ -661,9 +728,8 @@ def setup_nodejs():
     - AWS_CDK_CLI_SHOW_NODE_WARNINGS: If set, show Node.js version compatibility warnings
 
     Returns:
-        Tuple of (success, result) where:
-            success: Boolean indicating if a suitable JavaScript runtime was found
-            result: Path to JavaScript runtime or error message if not found
+        A tuple of (success, result) where success is True if a suitable JavaScript
+        runtime was found and result is the path to it, or an error message on failure.
     """
     # Get CDK Node.js requirements
     node_req = get_cdk_node_requirements()
@@ -704,9 +770,9 @@ def setup_nodejs():
                     logger.debug(
                         f"Bun v{bun_version} reports as Node.js v{reported_version}, which is not compatible with AWS CDK requirements: {node_req}"
                     )
-            except Exception:
+            except (subprocess.SubprocessError, OSError, ValueError) as e:
                 logger.debug(
-                    f"Bun v{bun_version} is less than minimum required version {MIN_BUN_VERSION}"
+                    f"Error checking Bun compatibility: {e}"
                 )
         else:
             logger.debug("Bun not found on the system")
@@ -773,7 +839,7 @@ def find_system_bun():
         bun_path = shutil.which("bun")
         if bun_path and os.path.exists(bun_path) and os.access(bun_path, os.X_OK):
             return bun_path
-    except Exception as e:
+    except OSError as e:
         logger.debug(f"Error finding system Bun: {e}")
 
     return None
@@ -801,7 +867,7 @@ def get_bun_version(bun_path):
             if match:
                 return match.group(1)
             return version
-    except Exception as e:
+    except (subprocess.SubprocessError, OSError) as e:
         logger.debug(f"Error getting Bun version: {e}")
 
     return None
@@ -830,7 +896,7 @@ def get_bun_reported_nodejs_version(bun_path):
             if version.startswith("v"):
                 version = version[1:]
             return version
-    except Exception as e:
+    except (subprocess.SubprocessError, OSError) as e:
         logger.debug(f"Error getting Bun's reported Node.js version: {e}")
 
     return None

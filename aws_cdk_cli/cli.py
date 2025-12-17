@@ -202,7 +202,7 @@ def create_node_symlink():
         if node_path and os.path.exists(node_path) and os.access(node_path, os.X_OK):
             node_binary = node_path
             logger.debug(f"Found Node.js binary via runtime: {node_binary}")
-    except Exception as e:
+    except OSError as e:
         logger.debug(f"Error getting Node.js path from runtime: {e}")
 
     # Check NODE_BIN_PATH as fallback

@@ -20,14 +20,82 @@ def get_package_dir():
     return os.path.dirname(os.path.abspath(__file__))
 
 
+def find_node_in_directory(platform_dir: str) -> Optional[str]:
+    """
+    Search for node binary in a given directory.
+
+    This is the canonical implementation for finding node binaries in a platform
+    directory. It searches in the following order:
+    1. node-v* directories (official Node.js distribution structure)
+    2. Direct path (bin/node or node.exe)
+    3. Recursive search as fallback
+
+    Args:
+        platform_dir: Directory to search for node binary
+
+    Returns:
+        Path to node binary if found, None otherwise
+    """
+    if not os.path.exists(platform_dir):
+        return None
+
+    node_file = "node.exe" if SYSTEM == "windows" else "node"
+    potential_paths = []
+
+    # Check for node-v* directories FIRST (official Node.js distribution structure)
+    try:
+        for item in os.listdir(platform_dir):
+            if item.startswith("node-v") and os.path.isdir(
+                os.path.join(platform_dir, item)
+            ):
+                bin_path = os.path.join(
+                    platform_dir,
+                    item,
+                    "bin" if SYSTEM != "windows" else "",
+                    node_file,
+                )
+                if os.path.exists(bin_path) and (
+                    SYSTEM == "windows" or os.access(bin_path, os.X_OK)
+                ):
+                    potential_paths.append(bin_path)
+    except (FileNotFoundError, PermissionError):
+        pass
+
+    # Fallback: direct binary path (for Docker containers or custom installations)
+    if SYSTEM == "windows":
+        direct_path = os.path.join(platform_dir, node_file)
+    else:
+        direct_path = os.path.join(platform_dir, "bin", node_file)
+
+    if os.path.exists(direct_path) and (
+        SYSTEM == "windows" or os.access(direct_path, os.X_OK)
+    ):
+        potential_paths.append(direct_path)
+
+    # Return the first valid binary found
+    if potential_paths:
+        return potential_paths[0]
+
+    # Fallback: search recursively
+    for root, dirs, files in os.walk(platform_dir):
+        if node_file in files:
+            full_path = os.path.join(root, node_file)
+            if os.path.exists(full_path) and (
+                SYSTEM == "windows" or os.access(full_path, os.X_OK)
+            ):
+                return full_path
+
+    return None
+
+
 def get_node_path() -> Optional[str]:
     """
     Get the path to the node binary. This function will check for the node binary
     in the following locations:
     1. NODE_BIN_PATH environment variable
     2. NODE_PLATFORM_DIR environment variable (will append bin/node or node.exe)
-    3. cdk node_modules directory (if CDK_PATH is set)
-    4. System PATH
+    3. Downloaded node binary in package directory (via _find_node_binary)
+    4. cdk node_modules directory (if CDK_PATH is set)
 
     Returns:
         The path to the node binary or None if it can't be found
@@ -41,51 +109,20 @@ def get_node_path() -> Optional[str]:
 
     node_platform_dir = os.environ.get("NODE_PLATFORM_DIR")
     if node_platform_dir:
-        potential_paths = []
-        node_file = "node.exe" if SYSTEM == "windows" else "node"
+        result = find_node_in_directory(node_platform_dir)
+        if result:
+            return result
 
-        # Check for node-v* directories FIRST (official Node.js distribution structure)
-        try:
-            for item in os.listdir(node_platform_dir):
-                if item.startswith("node-v") and os.path.isdir(
-                    os.path.join(node_platform_dir, item)
-                ):
-                    bin_path = os.path.join(
-                        node_platform_dir,
-                        item,
-                        "bin" if SYSTEM != "windows" else "",
-                        node_file,
-                    )
-                    if os.path.exists(bin_path) and (
-                        SYSTEM == "windows" or os.access(bin_path, os.X_OK)
-                    ):
-                        potential_paths.append(bin_path)
-        except (FileNotFoundError, PermissionError):
-            pass
+    # Try the package's downloaded node binary
+    # Import here to avoid circular import
+    try:
+        from aws_cdk_cli import _find_node_binary
 
-        # Fallback: direct binary path (for Docker containers or custom installations)
-        if SYSTEM == "windows":
-            direct_path = os.path.join(node_platform_dir, node_file)
-        else:
-            direct_path = os.path.join(node_platform_dir, "bin", node_file)
-
-        if os.path.exists(direct_path) and (
-            SYSTEM == "windows" or os.access(direct_path, os.X_OK)
-        ):
-            potential_paths.append(direct_path)
-
-        # Return the first valid binary found
-        if potential_paths:
-            return potential_paths[0]
-
-        # Fallback: search recursively
-        for root, dirs, files in os.walk(node_platform_dir):
-            if node_file in files:
-                full_path = os.path.join(root, node_file)
-                if os.path.exists(full_path) and (
-                    SYSTEM == "windows" or os.access(full_path, os.X_OK)
-                ):
-                    return full_path
+        downloaded_node = _find_node_binary()
+        if downloaded_node:
+            return downloaded_node
+    except ImportError:
+        pass
 
     # Try to find it in the CDK path
     cdk_path = os.environ.get("CDK_PATH")
@@ -219,7 +256,7 @@ def run_cdk(args):
             create_node_symlink()
         except ImportError:
             logger.debug("Could not create Node.js symlink: CLI module not available")
-        except Exception as e:
+        except OSError as e:
             logger.debug(f"Failed to create Node.js symlink: {e}")
 
     # Prepare the command
@@ -243,6 +280,6 @@ def run_cdk(args):
     # Run the command
     try:
         return subprocess.call(cmd, env=env)
-    except Exception as e:
+    except (subprocess.SubprocessError, OSError) as e:
         logger.error(f"Error running CDK command: {e}")
         return 1

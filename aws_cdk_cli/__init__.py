@@ -33,8 +33,13 @@ MACHINE = platform.machine().lower()
 
 
 # More robust platform detection
-def detect_platform():
-    """Detect the current platform and architecture more robustly."""
+def detect_platform() -> tuple[str, str]:
+    """Detect the current platform and architecture more robustly.
+
+    Returns:
+        A tuple of (system, machine) where system is one of 'darwin', 'linux', 'windows'
+        and machine is one of 'x86_64', 'arm64'.
+    """
     system = SYSTEM
     machine = MACHINE
 
@@ -135,29 +140,56 @@ LICENSES = {
 }
 
 
-def is_cdk_installed():
-    """Check if AWS CDK is installed in the package directory."""
+def is_cdk_installed() -> bool:
+    """Check if AWS CDK is installed in the package directory.
+
+    Returns:
+        True if the CDK script exists in the expected location, False otherwise.
+    """
     return os.path.exists(CDK_SCRIPT_PATH)
 
 
-def is_node_installed():
-    """Check if Node.js is installed in the package directory."""
-    global NODE_BIN_PATH  # Move global declaration to the beginning of the function
+def _find_node_binary() -> str | None:
+    """Find the Node.js binary path, searching common locations.
 
-    if not os.path.exists(NODE_BIN_PATH):
-        # If the path doesn't exist, let's try to find node.exe on Windows
-        if SYSTEM == "windows":
-            for root, dirs, files in os.walk(NODE_PLATFORM_DIR):
-                if "node.exe" in files:
-                    NODE_BIN_PATH = os.path.join(root, "node.exe")
-                    break
+    This is a pure function with no side effects. It searches for the node
+    binary in the expected locations based on the platform.
 
-    # Now check if the binary exists and is executable (file exists and has size > 0)
-    return os.path.exists(NODE_BIN_PATH) and os.path.getsize(NODE_BIN_PATH) > 0
+    Uses the shared find_node_in_directory() implementation from runtime.py
+    to avoid code duplication.
+
+    Returns:
+        The path to the node binary if found, None otherwise.
+    """
+    # First check the computed NODE_BIN_PATH
+    if os.path.exists(NODE_BIN_PATH) and os.path.getsize(NODE_BIN_PATH) > 0:
+        return NODE_BIN_PATH
+
+    # Use the shared implementation to search in the platform directory
+    from .runtime import find_node_in_directory
+
+    return find_node_in_directory(NODE_PLATFORM_DIR)
 
 
-def get_cdk_version():
-    """Get the installed CDK version."""
+def is_node_installed() -> bool:
+    """Check if Node.js is installed in the package directory.
+
+    This is a pure predicate function with no side effects.
+    It does not modify any global state.
+
+    Returns:
+        True if a valid Node.js binary is found, False otherwise.
+    """
+    return _find_node_binary() is not None
+
+
+def get_cdk_version() -> str | None:
+    """Get the installed CDK version.
+
+    Returns:
+        The CDK version string if found, None if CDK is not installed or version
+        cannot be determined.
+    """
     if not is_cdk_installed():
         return None
 
@@ -184,8 +216,13 @@ def get_cdk_version():
     return None
 
 
-def get_node_version():
-    """Get the installed Node.js version."""
+def get_node_version() -> str | None:
+    """Get the installed Node.js version.
+
+    Returns:
+        The Node.js version string if found, None if Node.js is not installed or
+        version cannot be determined.
+    """
     if not is_node_installed():
         return None
 
@@ -215,8 +252,15 @@ def get_node_version():
     return None
 
 
-def get_license_text(component):
-    """Get the license text for a component."""
+def get_license_text(component: str) -> str | None:
+    """Get the license text for a component.
+
+    Args:
+        component: The component name ('aws_cdk' or 'node').
+
+    Returns:
+        The license text as a string if found, None otherwise.
+    """
     license_path = LICENSES.get(component)
     if license_path and os.path.exists(license_path):
         try:
