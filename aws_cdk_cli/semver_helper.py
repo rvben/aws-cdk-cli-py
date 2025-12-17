@@ -4,10 +4,15 @@ Provides basic functionality for comparing semver version strings.
 """
 
 import re
+from typing import Optional
 
 
-def parse_version(version_str):
-    """Parse a version string into a tuple of components: (major, minor, patch, prerelease, build)"""
+# Type alias for parsed version tuple: (major, minor, patch, prerelease, build)
+VersionTuple = tuple[int, int, int, str, str]
+
+
+def parse_version(version_str: str) -> Optional[VersionTuple]:
+    """Parse a version string into a tuple of components: (major, minor, patch, prerelease, build)."""
     # Strip leading 'v' if present
     if version_str.startswith("v"):
         version_str = version_str[1:]
@@ -29,18 +34,26 @@ def parse_version(version_str):
     return (major, minor, patch, prerelease or "", build or "")
 
 
-def is_valid(version_str):
+def is_valid(version_str: str) -> bool:
     """Check if a string is a valid semver version."""
     return parse_version(version_str) is not None
 
 
-def compare(version1, version2):
+def compare(version1: str, version2: str) -> int:
     """
     Compare two version strings.
+
+    Args:
+        version1: First version string to compare.
+        version2: Second version string to compare.
+
     Returns:
-      -1 if version1 < version2
-       0 if version1 == version2
-       1 if version1 > version2
+        -1 if version1 < version2
+         0 if version1 == version2
+         1 if version1 > version2
+
+    Raises:
+        ValueError: If either version string is invalid.
     """
     v1 = parse_version(version1)
     v2 = parse_version(version2)
@@ -73,11 +86,19 @@ def compare(version1, version2):
     return 0
 
 
-def satisfies(version, requirement):
+def satisfies(version: str, requirement: str) -> bool:
     """
     Check if a version satisfies a requirement string.
+
+    Args:
+        version: The version string to check.
+        requirement: The requirement string (e.g., ">=1.0.0", "^2.0.0", "~1.2.3").
+
+    Returns:
+        True if the version satisfies the requirement, False otherwise.
+
     Supports basic comparison operators: =, >, <, >=, <=, ~, ^
-    Also supports range expressions with AND (space) and OR (||)
+    Also supports range expressions with AND (space) and OR (||).
     """
     # Split OR conditions
     or_parts = requirement.split("||")
@@ -107,7 +128,7 @@ def satisfies(version, requirement):
     return False
 
 
-def _check_single_requirement(version, req):
+def _check_single_requirement(version: str, req: str) -> bool:
     """Check if a version satisfies a single requirement string."""
     # Extract operator and version
     # Handle special range operators first

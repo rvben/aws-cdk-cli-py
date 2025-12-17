@@ -14,7 +14,9 @@ import tarfile
 import aws_cdk_cli.download as download
 
 import hashlib
+from pathlib import Path
 from .constants import NODE_VERSION, NODE_URLS, NODE_CHECKSUMS, SYSTEM, MACHINE
+from .installer import PathTraversalError
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -185,28 +187,55 @@ def download_node():
             logger.error("Downloaded file failed checksum verification")
             return False
 
+        # Path traversal protection helper
+        def is_within_directory(directory: str, target: str) -> bool:
+            """Check if target path is within directory (path traversal protection).
+
+            Uses pathlib for correct path-level comparison. The previous
+            implementation using os.path.commonprefix was vulnerable because
+            commonprefix operates on strings, not paths.
+            """
+            try:
+                abs_directory = Path(directory).resolve()
+                abs_target = Path(target).resolve()
+                abs_target.relative_to(abs_directory)
+                return True
+            except (ValueError, OSError):
+                return False
+
         # Extract the Node.js binaries
         if node_url.endswith(".zip"):
             with zipfile.ZipFile(temp_file.name, "r") as zip_ref:
+                # Verify all members are within extract directory
+                for member in zip_ref.namelist():
+                    member_path = os.path.join(extract_dir, member)
+                    if not is_within_directory(extract_dir, member_path):
+                        raise PathTraversalError(
+                            f"Attempted path traversal in zip file: {member}"
+                        )
                 # The filter parameter was added in Python 3.12
                 if sys.version_info >= (3, 12):
                     zip_ref.extractall(extract_dir, filter="data")
                 else:
-                    # For older Python versions, just use regular extractall
                     zip_ref.extractall(extract_dir)
         else:  # .tar.gz
             with tarfile.open(temp_file.name, "r:gz") as tar_ref:
+                # Verify all members are within extract directory
+                for member in tar_ref.getmembers():
+                    member_path = os.path.join(extract_dir, member.name)
+                    if not is_within_directory(extract_dir, member_path):
+                        raise PathTraversalError(
+                            f"Attempted path traversal in tar file: {member.name}"
+                        )
                 # The filter parameter was added in Python 3.12
                 if sys.version_info >= (3, 12):
-                    # Use 'data' filter to avoid the deprecation warning in Python 3.14+
                     tar_ref.extractall(extract_dir, filter="data")
                 else:
-                    # For older Python versions, just use regular extractall
                     tar_ref.extractall(extract_dir)
 
         logger.info(f"Node.js binaries downloaded and extracted to {extract_dir}")
         return True
-    except (download.DownloadError, zipfile.BadZipFile, tarfile.TarError, OSError) as e:
+    except (download.DownloadError, zipfile.BadZipFile, tarfile.TarError, PathTraversalError, OSError) as e:
         logger.error(f"Failed to download Node.js: {e}")
         return False
     finally:
@@ -220,11 +249,6 @@ def download_node():
         except OSError as e:
             logger.warning(f"Could not delete temporary file {temp_file.name}: {e}")
             # This is not a critical error, so we can continue
-
-    if "AWS_CDK_DEBUG" in os.environ or "AWS_CDK_VERBOSE" in os.environ:
-        logger.setLevel(logging.DEBUG)
-        # Make installer log more verbose as well
-        logging.getLogger("aws_cdk.installer").setLevel(logging.DEBUG)
 
 
 def is_cdk_installed():

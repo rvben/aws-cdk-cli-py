@@ -223,61 +223,14 @@ def create_node_symlink():
             node_binary = cached_binary
             logger.debug(f"Found Node.js binary in cache: {node_binary}")
 
-    # If still not found, search for it in the node_binaries directory
+    # If still not found, search for it in the node_binaries directory using shared logic
     if not node_binary:
         logger.debug("Searching for Node.js binary in node_binaries directory")
         node_binaries_dir = os.path.join(os.path.dirname(__file__), "node_binaries")
-        node_file = "node.exe" if SYSTEM == "windows" else "node"
-
-        # Check common paths first before walking the directory
-        potential_paths = []
-
-        # 1. Direct platform path (expected structure for Docker containers)
         platform_dir = os.path.join(node_binaries_dir, SYSTEM, MACHINE)
-        if os.path.exists(platform_dir):
-            # Look for node-v* directories first (official Node.js distribution structure)
-            try:
-                for item in os.listdir(platform_dir):
-                    if item.startswith("node-v") and os.path.isdir(
-                        os.path.join(platform_dir, item)
-                    ):
-                        if SYSTEM == "windows":
-                            potential_paths.append(
-                                os.path.join(platform_dir, item, node_file)
-                            )
-                        else:
-                            potential_paths.append(
-                                os.path.join(platform_dir, item, "bin", node_file)
-                            )
-            except (FileNotFoundError, PermissionError) as e:
-                logger.debug(f"Error listing platform directory: {e}")
-
-            # Fallback: direct bin path (for Docker containers or custom installations)
-            if SYSTEM == "windows":
-                potential_paths.append(os.path.join(platform_dir, node_file))
-            else:
-                potential_paths.append(os.path.join(platform_dir, "bin", node_file))
-
-        # Check all potential paths first
-        for potential_path in potential_paths:
-            if os.path.exists(potential_path) and (
-                SYSTEM == "windows" or os.access(potential_path, os.X_OK)
-            ):
-                node_binary = potential_path
-                logger.debug(f"Found Node.js binary at predefined path: {node_binary}")
-                break
-
-        # If still not found, do the recursive search as a last resort
-        if not node_binary:
-            for root, dirs, files in os.walk(node_binaries_dir):
-                if node_file in files:
-                    potential_node = os.path.join(root, node_file)
-                    if SYSTEM == "windows" or os.access(potential_node, os.X_OK):
-                        node_binary = potential_node
-                        logger.debug(
-                            f"Found Node.js binary via recursive search: {node_binary}"
-                        )
-                        break
+        node_binary = runtime.find_node_in_directory(platform_dir)
+        if node_binary:
+            logger.debug(f"Found Node.js binary via shared search: {node_binary}")
 
     # Check if we found a valid Node.js binary
     if not node_binary:
