@@ -163,7 +163,9 @@ def download_node():
             download.download_file(url=node_url, file_path=temp_file)
 
             # Verify checksum before caching
-            if expected_checksum and not verify_node_binary(temp_file, expected_checksum):
+            if expected_checksum and not verify_node_binary(
+                temp_file, expected_checksum
+            ):
                 raise ValueError("Downloaded file failed checksum verification")
 
             # Verify the download
@@ -666,9 +668,13 @@ def setup_nodejs():
     # Get CDK Node.js requirements
     node_req = get_cdk_node_requirements()
 
-    # Use bundled/downloaded Node.js if explicitly requested
+    # Check which runtime options are requested
     force_download = os.environ.get("AWS_CDK_CLI_USE_DOWNLOADED_NODE") is not None
-    if force_download:
+    force_system_node = os.environ.get("AWS_CDK_CLI_USE_SYSTEM_NODE") is not None
+
+    # Use bundled/downloaded Node.js if explicitly requested AND system node is not also requested
+    # (system node takes precedence when both are set, as per cli.py warning)
+    if force_download and not force_system_node:
         logger.info("Using downloaded Node.js")
         success, node_path = download_node()
         if success:
@@ -707,7 +713,6 @@ def setup_nodejs():
         logger.debug("Could not use Bun as runtime, falling back to system Node.js")
 
     # Try to use system Node.js if it's compatible or explicitly requested
-    force_system_node = os.environ.get("AWS_CDK_CLI_USE_SYSTEM_NODE") is not None
     system_node = find_system_nodejs()
 
     if system_node:

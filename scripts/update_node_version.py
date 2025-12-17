@@ -38,7 +38,7 @@ def fetch_checksums(version: str) -> dict:
     except urllib.error.HTTPError as e:
         if e.code == 404:
             print(f"Error: Node.js version {version} not found")
-            print(f"Check available versions at https://nodejs.org/dist/")
+            print("Check available versions at https://nodejs.org/dist/")
             sys.exit(1)
         raise
 
@@ -150,7 +150,7 @@ def main():
     update_constants_file(version, platform_checksums)
 
     print(f"Updated {CONSTANTS_FILE} with:")
-    print(f"  NODE_VERSION = \"{version}\"")
+    print(f'  NODE_VERSION = "{version}"')
     print("  NODE_CHECKSUMS for all platforms")
     print()
     print("Next steps:")

@@ -20,7 +20,16 @@ def setup_test_environment():
     """
     Prepare the environment for all tests.
     This ensures binary paths exist and the test CDK is available.
+
+    Note: This fixture DOES NOT create mock bin/node files that shadow the real
+    node binary. Tests that need mock node should use explicit mocking instead.
     """
+    import shutil
+
+    # Track created files/directories for cleanup
+    created_cdk_path = None
+    created_metadata_path = None
+
     # Mock the download_node function to avoid actual downloads during tests
     with patch("aws_cdk_cli.post_install.download_node", return_value=True):
         # Ensure Node.js binary directory exists
@@ -33,46 +42,30 @@ def setup_test_environment():
         elif machine in ("arm64", "aarch64"):
             machine = "aarch64" if system == "linux" else "arm64"
 
-        # Create binary directory structure
+        # Create binary directory structure (but NOT mock bin/node files)
         binary_dir = (
             Path(aws_cdk_cli.__file__).parent / "node_binaries" / system / machine
         )
+        binary_dir.mkdir(parents=True, exist_ok=True)
 
-        if system == "windows":
-            # Create Windows-specific structure
-            binary_dir.mkdir(parents=True, exist_ok=True)
-
-            # Create mock node.exe file
-            node_path = binary_dir / "node.exe"
-            if not node_path.exists():
-                with open(node_path, "w") as f:
-                    f.write("@echo off\necho v22.14.0\n")
-                # Make it executable (though Windows doesn't use file permissions the same way)
-                # This is just for consistency
+        # Clean up any leftover mock bin/node from previous test runs
+        # This ensures the real node binary (in node-v*) is used
+        mock_bin_dir = binary_dir / "bin"
+        if mock_bin_dir.exists():
+            # Check if it contains just mock files (shell scripts) vs real binaries
+            mock_node = mock_bin_dir / "node"
+            if mock_node.exists():
+                # Read first few bytes to detect if it's a shell script mock
                 try:
-                    os.chmod(node_path, 0o755)
-                except (OSError, PermissionError):
+                    with open(mock_node, "rb") as f:
+                        header = f.read(20)
+                    if header.startswith(b"#!/bin/sh") or header.startswith(
+                        b"@echo off"
+                    ):
+                        # It's a mock file, remove the whole bin directory
+                        shutil.rmtree(mock_bin_dir)
+                except Exception:
                     pass
-        else:
-            # Unix-based systems
-            bin_dir = binary_dir / "bin"
-            bin_dir.mkdir(parents=True, exist_ok=True)
-
-            # Create mock node executable
-            node_path = bin_dir / "node"
-            if not node_path.exists():
-                with open(node_path, "w") as f:
-                    f.write('#!/bin/sh\necho "v22.14.0"\n')
-                try:
-                    node_path.chmod(0o755)
-                    # Double-check permissions were set correctly
-                    assert os.access(node_path, os.X_OK), (
-                        f"Failed to make {node_path} executable"
-                    )
-                except Exception as e:
-                    print(
-                        f"Warning: Could not set executable permissions on {node_path}: {e}"
-                    )
 
         # Create CDK script directory and mock script
         cdk_dir = Path(aws_cdk_cli.__file__).parent / "node_modules" / "aws-cdk" / "bin"
@@ -88,6 +81,7 @@ def setup_test_environment():
                     f.write(
                         '#!/usr/bin/env node\nconsole.log("AWS CDK v2.99.0");\nprocess.exit(0);\n'
                     )
+            created_cdk_path = cdk_path
             try:
                 cdk_path.chmod(0o755)
                 if system != "windows":
@@ -102,19 +96,31 @@ def setup_test_environment():
 
         # Create node_modules metadata to prevent download attempts
         metadata_dir = Path(aws_cdk_cli.__file__).parent / "node_modules" / "aws-cdk"
-        with open(metadata_dir / "metadata.json", "w") as f:
-            f.write(
-                '{"cdk_version": "2.99.0", "installation_date": "2023-01-01T00:00:00.000Z"}'
-            )
+        metadata_path = metadata_dir / "metadata.json"
+        if not metadata_path.exists():
+            with open(metadata_path, "w") as f:
+                f.write(
+                    '{"cdk_version": "2.99.0", "installation_date": "2023-01-01T00:00:00.000Z"}'
+                )
+            created_metadata_path = metadata_path
 
         yield  # This is where the tests run
 
-    # No teardown needed, pytest will clean up temporary directories
+    # Clean up created mock files to avoid polluting other tests
+    if created_cdk_path and created_cdk_path.exists():
+        created_cdk_path.unlink()
+    if created_metadata_path and created_metadata_path.exists():
+        created_metadata_path.unlink()
 
 
 @pytest.fixture
 def setup_mock_env():
-    """Set up a mock environment for runtime detection tests."""
+    """Set up a mock environment for runtime detection tests.
+
+    Note: This fixture no longer creates mock node files. It just ensures
+    the binary directory structure exists. Tests should rely on the real
+    node binary in node-v*/bin/node or use explicit mocking.
+    """
     # Create a temporary directory structure
     system = platform.system().lower()
     machine = platform.machine().lower()
@@ -125,27 +131,11 @@ def setup_mock_env():
     elif machine in ("arm64", "aarch64"):
         machine = "aarch64" if system == "linux" else "arm64"
 
-    # Create node binary directory structure
+    # Create node binary directory structure (but NOT mock node files)
     binary_dir = Path(aws_cdk_cli.__file__).parent / "node_binaries" / system / machine
     binary_dir.mkdir(parents=True, exist_ok=True)
 
-    if system == "windows":
-        node_path = binary_dir / "node.exe"
-    else:
-        node_path = binary_dir / "node"
-
-    # Create a dummy node executable for testing
-    if not node_path.exists():
-        with open(node_path, "w") as f:
-            f.write("#!/bin/sh\necho 'v99.99.99'\n")
-
-        # Make the file executable
-        if system != "windows":
-            node_path.chmod(0o755)
-
     yield
-
-    # No cleanup needed as files are in the package directory
 
 
 def test_import():

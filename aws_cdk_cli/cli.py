@@ -218,9 +218,7 @@ def create_node_symlink():
     if not node_binary:
         logger.debug("Looking for Node.js binary in cache and other locations")
         cache_dir = os.path.join(os.path.expanduser("~"), ".cache", "aws-cdk-cli")
-        cached_binary = os.path.join(
-            cache_dir, f"node-v{NODE_VERSION}", "bin", "node"
-        )
+        cached_binary = os.path.join(cache_dir, f"node-v{NODE_VERSION}", "bin", "node")
         if os.path.exists(cached_binary) and os.access(cached_binary, os.X_OK):
             node_binary = cached_binary
             logger.debug(f"Found Node.js binary in cache: {node_binary}")
@@ -237,13 +235,7 @@ def create_node_symlink():
         # 1. Direct platform path (expected structure for Docker containers)
         platform_dir = os.path.join(node_binaries_dir, SYSTEM, MACHINE)
         if os.path.exists(platform_dir):
-            # Standard path for our installation
-            if SYSTEM == "windows":
-                potential_paths.append(os.path.join(platform_dir, node_file))
-            else:
-                potential_paths.append(os.path.join(platform_dir, "bin", node_file))
-
-            # Look for node-v* directories for original node distribution structure
+            # Look for node-v* directories first (official Node.js distribution structure)
             try:
                 for item in os.listdir(platform_dir):
                     if item.startswith("node-v") and os.path.isdir(
@@ -259,6 +251,12 @@ def create_node_symlink():
                             )
             except (FileNotFoundError, PermissionError) as e:
                 logger.debug(f"Error listing platform directory: {e}")
+
+            # Fallback: direct bin path (for Docker containers or custom installations)
+            if SYSTEM == "windows":
+                potential_paths.append(os.path.join(platform_dir, node_file))
+            else:
+                potential_paths.append(os.path.join(platform_dir, "bin", node_file))
 
         # Check all potential paths first
         for potential_path in potential_paths:
@@ -360,8 +358,8 @@ def create_node_symlink():
         logger.debug(f"Attempting to create symlink at: {target_path}")
 
         try:
-            # Remove existing symlink if it exists
-            if os.path.exists(target_path):
+            # Remove existing symlink if it exists (use lexists to detect broken symlinks)
+            if os.path.lexists(target_path):
                 if SYSTEM != "windows" and os.path.islink(target_path):
                     os.unlink(target_path)
                 else:

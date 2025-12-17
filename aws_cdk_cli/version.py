@@ -4,16 +4,16 @@ This file is auto-generated during the build process.
 It contains the AWS CDK version information.
 """
 
-__version__ = "0.0.0"  # Placeholder version
+__version__ = "2.1007.1"  # Python package version
 
 # Build information
-__build_date__ = "0000-00-00"
-__build_timestamp__ = "0.0"
-__build_commit__ = None
+__build_date__ = "2025-12-17"
+__build_timestamp__ = "1765961312.421957"
+__build_commit__ = "2c37515075722a28f0d7d08c754f824cc7bdbb65" if "2c37515075722a28f0d7d08c754f824cc7bdbb65" else None
 
 # Bundled software versions
 __node_version__ = "22.14.0"  # Version of Node.js downloaded during installation
-__cdk_version__ = __version__  # Version of AWS CDK bundled (same as package version)
+__cdk_version__ = "2.1007.0"  # Version of AWS CDK bundled
 
 # Component licenses
 __license__ = "MIT"  # License for the Python wrapper package
