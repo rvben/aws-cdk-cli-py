@@ -63,6 +63,9 @@ jobs:
             choco install make
           fi
 
+          # Download CDK and Node.js binaries first
+          make download-cdk
+
           # Run tests
           make test
 
