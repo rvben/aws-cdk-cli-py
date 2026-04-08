@@ -12,9 +12,9 @@ import datetime
 
 
 def validate_version(version: str, name: str) -> None:
-    """Validate version string as x.y.z or x.y.z.n; exit on failure."""
-    pattern = r"^\d+\.\d+\.\d+(?:\.\d+)?$"
-    example = "x.y.z or x.y.z.n"
+    """Validate version string as PEP 440 compatible; exit on failure."""
+    pattern = r"^\d+\.\d+\.\d+(?:\.\d+)?(?:\.(?:post|dev|rc)\d+)?$"
+    example = "x.y.z, x.y.z.n, or x.y.z.post1"
     if not re.match(pattern, version):
         print(f"Error: Invalid {name} format: {version}")
         print(f"{name.capitalize()} must be in the format {example}")

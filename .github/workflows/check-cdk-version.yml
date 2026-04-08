@@ -67,11 +67,47 @@ jobs:
         run: echo "No new version detected. Exiting." && exit 0
 
       # Only runs these steps if a new version is detected
+      - name: Update Node.js to latest LTS patch
+        if: steps.check-version.outputs.has_new_version == 'true'
+        run: |
+          CURRENT_NODE=$(grep 'NODE_VERSION = ' aws_cdk_cli/constants.py | sed 's/.*"\(.*\)".*/\1/')
+          MAJOR=$(echo "$CURRENT_NODE" | cut -d. -f1)
+          LATEST_NODE=$(curl -sfL "https://nodejs.org/dist/latest-v${MAJOR}.x/" | grep -oP 'node-v\K[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+
+          if [ -z "$LATEST_NODE" ]; then
+            echo "::warning::Could not fetch latest Node.js version, skipping update"
+            echo "node_updated=false" >> $GITHUB_ENV
+            exit 0
+          fi
+
+          echo "Current Node.js: ${CURRENT_NODE}, Latest ${MAJOR}.x: ${LATEST_NODE}"
+
+          if [ "$CURRENT_NODE" != "$LATEST_NODE" ]; then
+            if python3 scripts/update_node_version.py "$LATEST_NODE"; then
+              echo "node_updated=true" >> $GITHUB_ENV
+              echo "node_version=${LATEST_NODE}" >> $GITHUB_ENV
+            else
+              echo "::warning::Node.js update to ${LATEST_NODE} failed, continuing with ${CURRENT_NODE}"
+              git checkout -- aws_cdk_cli/constants.py
+              echo "node_updated=false" >> $GITHUB_ENV
+            fi
+          else
+            echo "Node.js already up to date"
+            echo "node_updated=false" >> $GITHUB_ENV
+          fi
+
       - name: Configure Git
         if: steps.check-version.outputs.has_new_version == 'true'
         run: |
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
+
+      - name: Commit Node.js update
+        if: steps.check-version.outputs.has_new_version == 'true' && env.node_updated == 'true'
+        run: |
+          git add aws_cdk_cli/constants.py
+          git commit -m "chore: update bundled Node.js to ${node_version}"
+          git push https://${{ secrets.GH_PAT }}@github.com/${GITHUB_REPOSITORY}.git HEAD:main
 
       - name: Create and push tag
         if: steps.check-version.outputs.has_new_version == 'true'

@@ -39,14 +39,15 @@ jobs:
         shell: bash
         run: |
           if [[ "${{ github.event_name }}" == "push" ]]; then
-            # Triggered by tag push
             VERSION=${GITHUB_REF#refs/tags/v}
           else
-            # Triggered manually
             VERSION="${{ github.event.inputs.version }}"
           fi
+          # Strip PEP 440 suffixes (.post1, .dev1, .rc1) to get the CDK version for npm
+          CDK_VERSION=$(echo "$VERSION" | sed 's/\.\(post\|dev\|rc\)[0-9]*$//')
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "Building for version: ${VERSION}"
+          echo "cdk_version=${CDK_VERSION}" >> $GITHUB_OUTPUT
+          echo "Wrapper version: ${VERSION}, CDK version: ${CDK_VERSION}"
 
       - name: Install uv
         shell: bash
@@ -56,7 +57,7 @@ jobs:
       - name: Run tests with make
         shell: bash
         env:
-          CDK_VERSION: ${{ steps.get_version.outputs.version }}
+          CDK_VERSION: ${{ steps.get_version.outputs.cdk_version }}
         run: |
           # Ensure make is installed on Windows
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
@@ -93,14 +94,14 @@ jobs:
         id: get_version
         run: |
           if [[ "${{ github.event_name }}" == "push" ]]; then
-            # Triggered by tag push
             VERSION=${GITHUB_REF#refs/tags/v}
           else
-            # Triggered manually
             VERSION="${{ github.event.inputs.version }}"
           fi
+          CDK_VERSION=$(echo "$VERSION" | sed 's/\.\(post\|dev\|rc\)[0-9]*$//')
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "Building for version: ${VERSION}"
+          echo "cdk_version=${CDK_VERSION}" >> $GITHUB_OUTPUT
+          echo "Wrapper version: ${VERSION}, CDK version: ${CDK_VERSION}"
 
       - name: Install build dependencies
         run: |
@@ -108,9 +109,10 @@ jobs:
 
       - name: Build package with make
         env:
-          CDK_VERSION: ${{ steps.get_version.outputs.version }}
+          CDK_VERSION: ${{ steps.get_version.outputs.cdk_version }}
+          WRAPPER_VERSION: ${{ steps.get_version.outputs.version }}
         run: |
-          echo "Building with CDK version $CDK_VERSION"
+          echo "Building CDK ${CDK_VERSION} as wrapper version ${WRAPPER_VERSION}"
           make build
 
       - name: Upload package as artifact
@@ -127,10 +129,9 @@ jobs:
           make publish-test
 
       - name: Publish to PyPI with make
-        if: success()  # Only run if all previous steps succeeded
+        if: success()
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-          CDK_VERSION: ${{ steps.get_version.outputs.version }}
         run: |
           make publish-prod

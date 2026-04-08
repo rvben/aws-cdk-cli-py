@@ -529,9 +529,9 @@ def get_cdk_node_requirements():
     Extract the Node.js version requirements from CDK's package.json.
 
     Returns:
-        str: Node.js version requirement string (e.g. ">= 20.0.0"), or None if not found
+        str: Node.js version requirement string (e.g. ">= 22.0.0"), or None if not found
     """
-    MIN_NODE_VERSION = "20.0.0"
+    MIN_NODE_VERSION = "22.0.0"
     try:
         package_json_path = os.path.join(NODE_MODULES_DIR, "aws-cdk", "package.json")
         if not os.path.exists(package_json_path):
@@ -544,11 +544,11 @@ def get_cdk_node_requirements():
         # Extract Node.js version requirements from the engines field
         node_requirement = package_data.get("engines", {}).get("node")
         if node_requirement:
-            # Enforce minimum Node.js 20
             min_version = extract_min_from_req(node_requirement)
             if min_version:
                 min_tuple = tuple(map(int, min_version.split(".")))
-                if min_tuple < (20, 0, 0):
+                min_floor = tuple(map(int, MIN_NODE_VERSION.split(".")))
+                if min_tuple < min_floor:
                     return f">= {MIN_NODE_VERSION}"
             return node_requirement
     except (OSError, json.JSONDecodeError, ValueError) as e:

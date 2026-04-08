@@ -252,11 +252,11 @@ def test_force_download_node():
 
 
 def test_minimum_node_version_requirement():
-    """Test that the minimum Node.js version requirement is >= 20.0.0."""
+    """Test that the minimum Node.js version requirement is >= 22.0.0."""
     req = get_cdk_node_requirements()
     match = re.search(r"(\d+)\.(\d+)\.(\d+)", req)
     assert match, f"Requirement string does not contain a version: {req}"
     min_version = tuple(map(int, match.groups()))
-    assert min_version >= (20, 0, 0), (
+    assert min_version >= (22, 0, 0), (
         f"Minimum Node.js version is too low: {min_version}"
     )
