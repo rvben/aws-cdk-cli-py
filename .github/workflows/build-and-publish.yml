@@ -44,7 +44,7 @@ jobs:
             VERSION="${{ github.event.inputs.version }}"
           fi
           # Strip PEP 440 suffixes (.post1, .dev1, .rc1) to get the CDK version for npm
-          CDK_VERSION=$(echo "$VERSION" | sed 's/\.\(post\|dev\|rc\)[0-9]*$//')
+          CDK_VERSION=$(echo "$VERSION" | sed -E 's/\.(post|dev|rc)[0-9]*$//')
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "cdk_version=${CDK_VERSION}" >> $GITHUB_OUTPUT
           echo "Wrapper version: ${VERSION}, CDK version: ${CDK_VERSION}"
@@ -98,7 +98,7 @@ jobs:
           else
             VERSION="${{ github.event.inputs.version }}"
           fi
-          CDK_VERSION=$(echo "$VERSION" | sed 's/\.\(post\|dev\|rc\)[0-9]*$//')
+          CDK_VERSION=$(echo "$VERSION" | sed -E 's/\.(post|dev|rc)[0-9]*$//')
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "cdk_version=${CDK_VERSION}" >> $GITHUB_OUTPUT
           echo "Wrapper version: ${VERSION}, CDK version: ${CDK_VERSION}"
