@@ -25,6 +25,51 @@ PLATFORMS = {
 }
 
 CONSTANTS_FILE = "aws_cdk_cli/constants.py"
+NODE_DIST_INDEX_URL = "https://nodejs.org/dist/latest-v{major}.x/"
+
+
+def read_node_version(constants_text: str) -> str:
+    """Return the ``NODE_VERSION`` value defined in constants.py source text.
+
+    Raises ``ValueError`` if the assignment is absent, so a renamed/moved
+    constant fails loudly instead of silently yielding an empty version.
+    """
+    match = re.search(r'^NODE_VERSION\s*=\s*"([^"]+)"', constants_text, re.MULTILINE)
+    if not match:
+        raise ValueError("NODE_VERSION assignment not found in constants.py")
+    return match.group(1)
+
+
+def parse_latest_patch(index_html: str) -> str:
+    """Return the highest ``node-vX.Y.Z`` version listed in a dist directory index.
+
+    The nodejs.org ``latest-vXX.x/`` page links files like
+    ``node-v22.22.3-linux-x64.tar.gz``. Raises ``ValueError`` if no such entry is
+    present, so a changed page format surfaces as an error rather than a silent
+    "no update".
+    """
+    versions = re.findall(r"node-v(\d+)\.(\d+)\.(\d+)", index_html)
+    if not versions:
+        raise ValueError("No node-vX.Y.Z entries found in the dist index")
+    major, minor, patch = max((int(a), int(b), int(c)) for a, b, c in versions)
+    return f"{major}.{minor}.{patch}"
+
+
+def detect_latest_patch(major: int, opener=urllib.request.urlopen) -> str:
+    """Return the latest Node.js patch for ``major`` from nodejs.org.
+
+    ``opener`` is injectable so the network call can be exercised in tests.
+    """
+    url = NODE_DIST_INDEX_URL.format(major=major)
+    with opener(url, timeout=30) as response:
+        index_html = response.read().decode("utf-8")
+    return parse_latest_patch(index_html)
+
+
+def read_current_node_version() -> str:
+    """Return the currently bundled Node.js version from constants.py on disk."""
+    with open(CONSTANTS_FILE) as f:
+        return read_node_version(f.read())
 
 
 def fetch_checksums(version: str) -> dict:
@@ -121,12 +166,27 @@ def update_constants_file(version: str, checksums: dict) -> None:
 
 
 def main():
-    if len(sys.argv) != 2:
+    args = sys.argv[1:]
+
+    # Query modes print a single version to stdout so callers (make targets, the
+    # workflow) can capture it directly. Errors propagate so a failure is visible
+    # rather than yielding an empty string.
+    if args == ["--current"]:
+        print(read_current_node_version())
+        return
+    if args == ["--latest"]:
+        major = int(read_current_node_version().split(".")[0])
+        print(detect_latest_patch(major))
+        return
+
+    if len(args) != 1:
         print("Usage: python scripts/update_node_version.py <version>")
+        print("       python scripts/update_node_version.py --current")
+        print("       python scripts/update_node_version.py --latest")
         print("Example: python scripts/update_node_version.py 22.15.0")
         sys.exit(1)
 
-    version = sys.argv[1]
+    version = args[0]
 
     # Strip 'v' prefix if present
     if version.startswith("v"):

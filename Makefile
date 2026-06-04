@@ -19,6 +19,27 @@ version:
 	@echo "CDK version: $(CDK_VERSION)"
 	@echo "Wrapper version: $(WRAPPER_VERSION)"
 
+# These targets are pure-Python and need neither a virtualenv nor npm. The empty
+# overrides stop `.EXPORT_ALL_VARIABLES` from expanding the npm-backed
+# CDK_VERSION/WRAPPER_VERSION (a `npm view` network call) into their environment.
+NO_NPM_TARGETS := check-cdk-update node-current-version node-latest-version
+$(NO_NPM_TARGETS): CDK_VERSION :=
+$(NO_NPM_TARGETS): WRAPPER_VERSION :=
+
+# Check whether a newer AWS CDK version is published on npm.
+# Writes has_new_version/current_version/latest_version to $GITHUB_OUTPUT when set.
+check-cdk-update:
+	@$(PY) -m scripts.check_cdk_update
+
+# Print the currently bundled / latest-available Node.js patch for its major.
+# Used by the update workflow in place of inline curl|grep so the logic is tested
+# and runs locally.
+node-current-version:
+	@$(PY) scripts/update_node_version.py --current
+
+node-latest-version:
+	@$(PY) scripts/update_node_version.py --latest
+
 clean:
 	rm -rf dist
 	rm -rf .venv

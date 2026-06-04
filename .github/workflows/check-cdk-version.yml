@@ -10,6 +10,14 @@ on:
 permissions:
   contents: write  # Needed for pushing tags
 
+# Serialize runs so a scheduled run and a manual dispatch can never race to
+# create the same tag. A queued run only starts after the active one finishes,
+# so its fresh checkout already contains any tag the previous run pushed and it
+# then exits cleanly as "up to date". Never cancel an in-flight run mid-push.
+concurrency:
+  group: check-cdk-updates
+  cancel-in-progress: false
+
 jobs:
   check-version:
     runs-on: ubuntu-latest
@@ -21,66 +29,34 @@ jobs:
         with:
           fetch-depth: 0  # Fetch all tags and history
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          node-version: '22'
+          python-version: '3.12'
 
-      - name: Get current version from latest tag
-        id: current-version
-        run: |
-          # Get latest tag or default to v0.0.0 if no tags exist
-          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-          CURRENT_VERSION=${LATEST_TAG#v}  # Remove the v prefix
-          echo "current_version=${CURRENT_VERSION}" >> $GITHUB_OUTPUT
-          echo "Current version from git tag: ${CURRENT_VERSION}"
-
+      # Runs the same `make check-cdk-update` target that runs locally.
+      # The check is pure Python (no npm/npx); it fails the job on any error
+      # rather than silently reporting "no update".
       - name: Check for new CDK version
-        id: check-version
-        run: |
-          LATEST_VERSION=$(npm view aws-cdk version)
-          CURRENT_VERSION="${{ steps.current-version.outputs.current_version }}"
-          echo "latest_version=${LATEST_VERSION}" >> $GITHUB_OUTPUT
-          echo "Latest version from npm: ${LATEST_VERSION}"
-          echo "Current version from tag: ${CURRENT_VERSION}"
-
-          # Use semver for proper semantic version comparison
-          IS_GREATER=$(npx --yes semver "$LATEST_VERSION" --range ">$CURRENT_VERSION" || echo "")
-
-          if [ -n "$IS_GREATER" ]; then
-            # Double-check: ensure tag doesn't already exist (race condition safeguard)
-            if git rev-parse "v${LATEST_VERSION}" >/dev/null 2>&1; then
-              echo "has_new_version=false" >> $GITHUB_OUTPUT
-              echo "Tag v${LATEST_VERSION} already exists, skipping"
-            else
-              echo "has_new_version=true" >> $GITHUB_OUTPUT
-              echo "New version detected: ${LATEST_VERSION} > ${CURRENT_VERSION}"
-            fi
-          else
-            echo "has_new_version=false" >> $GITHUB_OUTPUT
-            echo "No new version (current: ${CURRENT_VERSION}, npm: ${LATEST_VERSION})"
-          fi
-
-      # Early exit if no new version
-      - name: Exit if no new version
-        if: steps.check-version.outputs.has_new_version != 'true'
-        run: echo "No new version detected. Exiting." && exit 0
+        id: check
+        run: make check-cdk-update
 
       # Only runs these steps if a new version is detected
       - name: Update Node.js to latest LTS patch
-        if: steps.check-version.outputs.has_new_version == 'true'
+        if: steps.check.outputs.has_new_version == 'true'
         run: |
-          CURRENT_NODE=$(grep 'NODE_VERSION = ' aws_cdk_cli/constants.py | sed 's/.*"\(.*\)".*/\1/')
-          MAJOR=$(echo "$CURRENT_NODE" | cut -d. -f1)
-          LATEST_NODE=$(curl -sfL "https://nodejs.org/dist/latest-v${MAJOR}.x/" | grep -oP 'node-v\K[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+          # Detection is tested Python behind make targets (see scripts/update_node_version.py).
+          # A Node.js patch must never block a CDK release, so detection failure is a soft skip.
+          CURRENT_NODE=$(make -s node-current-version)
+          LATEST_NODE=$(make -s node-latest-version || true)
 
           if [ -z "$LATEST_NODE" ]; then
-            echo "::warning::Could not fetch latest Node.js version, skipping update"
+            echo "::warning::Could not determine latest Node.js version, skipping update"
             echo "node_updated=false" >> $GITHUB_ENV
             exit 0
           fi
 
-          echo "Current Node.js: ${CURRENT_NODE}, Latest ${MAJOR}.x: ${LATEST_NODE}"
+          echo "Current Node.js: ${CURRENT_NODE}, Latest: ${LATEST_NODE}"
 
           if [ "$CURRENT_NODE" != "$LATEST_NODE" ]; then
             if python3 scripts/update_node_version.py "$LATEST_NODE"; then
@@ -97,22 +73,22 @@ jobs:
           fi
 
       - name: Configure Git
-        if: steps.check-version.outputs.has_new_version == 'true'
+        if: steps.check.outputs.has_new_version == 'true'
         run: |
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
 
       - name: Commit Node.js update
-        if: steps.check-version.outputs.has_new_version == 'true' && env.node_updated == 'true'
+        if: steps.check.outputs.has_new_version == 'true' && env.node_updated == 'true'
         run: |
           git add aws_cdk_cli/constants.py
           git commit -m "chore: update bundled Node.js to ${node_version}"
           git push https://${{ secrets.GH_PAT }}@github.com/${GITHUB_REPOSITORY}.git HEAD:main
 
       - name: Create and push tag
-        if: steps.check-version.outputs.has_new_version == 'true'
+        if: steps.check.outputs.has_new_version == 'true'
         run: |
-          NEW_VERSION="${{ steps.check-version.outputs.latest_version }}"
+          NEW_VERSION="${{ steps.check.outputs.latest_version }}"
           echo "Creating tag v${NEW_VERSION}"
 
           # Create and push the tag with PAT to trigger other workflows
@@ -120,11 +96,11 @@ jobs:
           git push https://${{ secrets.GH_PAT }}@github.com/${GITHUB_REPOSITORY}.git "v${NEW_VERSION}"
 
       - name: Trigger build-and-publish workflow
-        if: steps.check-version.outputs.has_new_version == 'true'
+        if: steps.check.outputs.has_new_version == 'true'
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
           REPO: ${{ github.repository }}
-          VERSION: ${{ steps.check-version.outputs.latest_version }}
+          VERSION: ${{ steps.check.outputs.latest_version }}
         run: |
           curl -X POST \
             -H "Accept: application/vnd.github+json" \
@@ -137,6 +113,6 @@ jobs:
             }'
 
       - name: Create Release Info
-        if: steps.check-version.outputs.has_new_version == 'true'
+        if: steps.check.outputs.has_new_version == 'true'
         run: |
-          echo "::notice::Created new tag v${{ steps.check-version.outputs.latest_version }} for AWS CDK update"
+          echo "::notice::Created new tag v${{ steps.check.outputs.latest_version }} for AWS CDK update"
