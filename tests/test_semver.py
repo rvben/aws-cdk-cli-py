@@ -253,5 +253,7 @@ class TestNodeVersionCompatibility:
     def test_node_version_with_prerelease(self):
         """Test Node.js prerelease version handling."""
         # Node.js sometimes has nightly/canary releases
-        assert satisfies("20.0.0-nightly", ">=20.0.0") is False  # Prerelease has lower precedence
+        assert (
+            satisfies("20.0.0-nightly", ">=20.0.0") is False
+        )  # Prerelease has lower precedence
         assert satisfies("20.0.0", ">=20.0.0") is True

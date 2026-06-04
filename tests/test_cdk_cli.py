@@ -152,7 +152,9 @@ def test_node_detection():
     # Verify the path exists (with better error handling)
     node_path = Path(aws_cdk_cli.NODE_BIN_PATH)
     if not node_path.exists():
-        pytest.skip(f"Node.js binary not available at {node_path} - run installer first")
+        pytest.skip(
+            f"Node.js binary not available at {node_path} - run installer first"
+        )
 
     # Ensure the binary is executable on non-Windows platforms
     if platform.system().lower() != "windows":
@@ -306,7 +308,9 @@ def test_runtime_detection(setup_mock_env):
     # Validate - skip if binary not available
     node_binary = Path(aws_cdk_cli.NODE_BIN_PATH)
     if not node_binary.exists():
-        pytest.skip(f"Node.js binary not available at {node_binary} - run installer first")
+        pytest.skip(
+            f"Node.js binary not available at {node_binary} - run installer first"
+        )
 
 
 @pytest.mark.slow
@@ -436,7 +440,9 @@ def test_platform_specific_binaries():
     # Check that binaries for current platform exist
     binary_dir = Path(aws_cdk_cli.__file__).parent / "node_binaries" / system / machine
     if not binary_dir.exists():
-        pytest.skip(f"Node.js binary directory not available at {binary_dir} - run installer first")
+        pytest.skip(
+            f"Node.js binary directory not available at {binary_dir} - run installer first"
+        )
 
     # Output debug info for CI
     print(f"System: {system}")
@@ -447,7 +453,9 @@ def test_platform_specific_binaries():
     # Verify node executable is in this directory (or subdirectory)
     node_binary = Path(aws_cdk_cli.NODE_BIN_PATH)
     if not node_binary.exists():
-        pytest.skip(f"Node.js binary not available at {node_binary} - run installer first")
+        pytest.skip(
+            f"Node.js binary not available at {node_binary} - run installer first"
+        )
 
     # Ensure the binary is executable (skip on Windows)
     if system != "windows":

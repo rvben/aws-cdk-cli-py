@@ -99,7 +99,12 @@ def get_latest_cdk_version() -> str | None:
             ) as response:
                 data = json.loads(response.read().decode("utf-8"))
                 return data.get("version")
-        except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError, OSError):
+        except (
+            urllib.error.URLError,
+            urllib.error.HTTPError,
+            json.JSONDecodeError,
+            OSError,
+        ):
             pass
 
     logger.error("Failed to get latest AWS CDK version from npm")
@@ -425,7 +430,9 @@ def download_node() -> tuple[bool, str]:
                         os.chmod(path, 0o755)
                         logger.debug(f"Made Node.js binary executable: {path}")
                     except OSError as e:
-                        logger.debug(f"Could not chmod binary (may already be executable): {e}")
+                        logger.debug(
+                            f"Could not chmod binary (may already be executable): {e}"
+                        )
                 node_path = path
                 break
 
@@ -771,9 +778,7 @@ def setup_nodejs() -> tuple[bool, str]:
                         f"Bun v{bun_version} reports as Node.js v{reported_version}, which is not compatible with AWS CDK requirements: {node_req}"
                     )
             except (subprocess.SubprocessError, OSError, ValueError) as e:
-                logger.debug(
-                    f"Error checking Bun compatibility: {e}"
-                )
+                logger.debug(f"Error checking Bun compatibility: {e}")
         else:
             logger.debug("Bun not found on the system")
         logger.debug("Could not use Bun as runtime, falling back to system Node.js")

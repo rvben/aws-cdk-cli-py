@@ -59,7 +59,9 @@ class TestPathTraversalProtection:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             # Attack: parent directory traversal
-            assert not is_within_directory(tmpdir, os.path.join(tmpdir, "..", "etc", "passwd"))
+            assert not is_within_directory(
+                tmpdir, os.path.join(tmpdir, "..", "etc", "passwd")
+            )
 
             # Attack: absolute path outside
             assert not is_within_directory(tmpdir, "/etc/passwd")
@@ -80,6 +82,7 @@ class TestPathTraversalProtection:
                 )
             finally:
                 import shutil
+
                 shutil.rmtree(evil_dir, ignore_errors=True)
 
     def test_is_within_directory_symlink_attack(self):
@@ -128,6 +131,7 @@ class TestPathTraversalProtection:
                 malicious_info = tarfile.TarInfo(name="../../../etc/evil.txt")
                 malicious_info.size = 12
                 import io
+
                 tar.addfile(malicious_info, io.BytesIO(b"evil content"))
 
             # Now test that extraction is blocked
@@ -148,7 +152,9 @@ class TestPathTraversalProtection:
                     member_path = os.path.join(extract_dir, member.name)
                     if not is_within_directory(extract_dir, member_path):
                         # This should trigger for the malicious member
-                        assert "../" in member.name, f"Expected traversal in {member.name}"
+                        assert "../" in member.name, (
+                            f"Expected traversal in {member.name}"
+                        )
                         break
                 else:
                     pytest.fail("Malicious tar member was not detected")

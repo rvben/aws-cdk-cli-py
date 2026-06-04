@@ -25,7 +25,9 @@ except ImportError:
 
 class PathTraversalError(Exception):
     """Raised when a path traversal attack is detected in an archive."""
+
     pass
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -244,7 +246,13 @@ def download_node():
 
         logger.info(f"Node.js binaries downloaded and extracted to {extract_dir}")
         return True
-    except (download.DownloadError, zipfile.BadZipFile, tarfile.TarError, PathTraversalError, OSError) as e:
+    except (
+        download.DownloadError,
+        zipfile.BadZipFile,
+        tarfile.TarError,
+        PathTraversalError,
+        OSError,
+    ) as e:
         logger.error(f"Failed to download Node.js: {e}")
         return False
     finally:
