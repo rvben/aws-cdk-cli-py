@@ -8,7 +8,7 @@ import os
 import platform
 
 # Node.js version to use (LTS)
-NODE_VERSION = "22.22.2"
+NODE_VERSION = "22.22.3"
 
 # Minimum Bun version required for --eval support
 MIN_BUN_VERSION = "1.1.0"
@@ -57,15 +57,15 @@ NODE_URLS = get_node_urls()
 # These must be updated when NODE_VERSION changes
 NODE_CHECKSUMS = {
     "darwin": {
-        "arm64": "db4b275b83736df67533529a18cc55de2549a8329ace6c7bcc68f8d22d3c9000",
-        "x86_64": "12a6abb9c2902cf48a21120da13f87fde1ed1b71a13330712949e8db818708ba",
+        "arm64": "0da7ff74ef8611328c8212f17943368713a2ad953fb7d89a8c8a0eae87c23207",
+        "x86_64": "45830ba752fa0d892c6dcd640946669801293cac820a33591ded40ac075198ec",
     },
     "linux": {
-        "arm64": "b2f3a96f31486bfc365192ad65ced14833ad2a3c2e1bcefec4846902f264fa28",
-        "x86_64": "978978a635eef872fa68beae09f0aad0bbbae6757e444da80b570964a97e62a3",
+        "arm64": "cc8bc82b2dd0b595c3b95a4c3c9c8c350907cff011afbdee3d1379e812e1e3e3",
+        "x86_64": "c7a10d6816da8eaaa7534dd73c71c6e2b2c391dbbf845e364902d156615dd1b8",
     },
     "windows": {
-        "x86_64": "7c93e9d92bf68c07182b471aa187e35ee6cd08ef0f24ab060dfff605fcc1c57c",
+        "x86_64": "6c8d54f635feff4df76c2ca80f45332eb2ff57d25226edce36592e51a177ee33",
     },
 }
 
