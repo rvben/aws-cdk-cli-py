@@ -34,9 +34,12 @@ dev = [
 ]
 
 [project.optional-dependencies]
+# Mirrors [dependency-groups].dev so the documented `pip install -e ".[dev]"`
+# contributor setup works alongside `uv sync`. Keep the two lists in step.
 dev = [
     "pytest>=8.0.0",
     "ruff>=0.8.0",
+    "pytest-cov>=6.0.0",
 ]
 docs = [
     "sphinx>=8.0.0,<9",
@@ -60,10 +63,9 @@ install = "setup.PostInstallCommand"
 develop = "setup.PostDevelopCommand"
 sdist = "setup.CustomSdist"
 
-[tool.black]
+[tool.ruff]
 line-length = 88
-target-version = ["py310", "py311", "py312", "py313"]
-include = '\.pyi?$'
+target-version = "py310"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

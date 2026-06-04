@@ -22,6 +22,7 @@ source = { editable = "." }
 [package.optional-dependencies]
 dev = [
     { name = "pytest" },
+    { name = "pytest-cov" },
     { name = "ruff" },
 ]
 docs = [
@@ -40,6 +41,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8.0" },
     { name = "sphinx", marker = "extra == 'docs'", specifier = ">=8.0.0,<9" },
     { name = "sphinx-rtd-theme", marker = "extra == 'docs'", specifier = ">=3.0.0" },
