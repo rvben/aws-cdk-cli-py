@@ -52,7 +52,9 @@ cdk = "aws_cdk_cli.cli:main"
 [tool.setuptools]
 packages = ["aws_cdk_cli"]
 include-package-data = true
-package-data = {"aws_cdk_cli" = ["node_binaries/**/*", "node_modules/**/*"]}
+# node_modules (the bundled AWS CDK) is shipped; the Node.js runtime
+# (node_binaries) is downloaded on first run, so it is intentionally not listed.
+package-data = {"aws_cdk_cli" = ["node_modules/**/*"]}
 
 [tool.setuptools.dynamic]
 version = {attr = "aws_cdk_cli.version.__version__"}
