@@ -6,47 +6,89 @@ These tests exercise the exact production code path used by the
 silent failure that previously let the checker report "no update" for weeks.
 """
 
+import urllib.error
+
 import pytest
 
 from scripts.check_cdk_update import (
     decide,
     fetch_npm_payload,
+    fetch_pypi_payload,
     is_update_available,
     main,
     parse_npm_version,
-    select_current_version,
+    parse_pypi_version,
     write_github_output,
 )
 
 
-class TestSelectCurrentVersion:
-    """Selecting the current published CDK version from git tags."""
+class FakeResponse:
+    """Minimal stand-in for the object ``urlopen`` yields."""
 
-    def test_ignores_pep440_post_release_tags(self):
-        """A PEP 440 post-release tag (e.g. v2.1117.0.post1) is not valid semver
-        and must not become the baseline, or every comparison against npm breaks.
+    def __init__(self, body: bytes):
+        self._body = body
+
+    def read(self):
+        return self._body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+def http_error(code: int):
+    return urllib.error.HTTPError(
+        url="https://pypi.org/pypi/aws-cdk-cli/json",
+        code=code,
+        msg="error",
+        hdrs=None,
+        fp=None,
+    )
+
+
+class TestParsePypiVersion:
+    """Reading the already-released version from the PyPI project document."""
+
+    def test_extracts_info_version(self):
+        payload = '{"info": {"version": "2.1117.0"}, "releases": {}}'
+        assert parse_pypi_version(payload) == "2.1117.0"
+
+    def test_strips_post_release_suffix(self):
+        """A .postN release republishes the same upstream CDK version, so the
+        baseline is the upstream version underneath it.
         """
-        tags = ["v2.1116.0", "v2.1117.0", "v2.1117.0.post1"]
-        assert select_current_version(tags) == "2.1117.0"
+        payload = '{"info": {"version": "2.1117.0.post1"}}'
+        assert parse_pypi_version(payload) == "2.1117.0"
 
-    def test_picks_highest_by_semver_not_lexically(self):
-        """v2.1117.0 > v2.199.0 numerically, even though '199' sorts after '1117'
-        as a string. Lexical sorting would pick the wrong tag.
+    def test_absent_project_is_the_unpublished_baseline(self):
+        """A 404 (mapped to None by the fetcher) means nothing is published
+        yet, which is the correct first-release path.
         """
-        tags = ["v2.199.0", "v2.1117.0", "v2.1110.0"]
-        assert select_current_version(tags) == "2.1117.0"
+        assert parse_pypi_version(None) == "0.0.0"
 
-    def test_unsorted_input(self):
-        """Tag order from git is not guaranteed; selection must not depend on it."""
-        tags = ["v2.1110.0", "v2.1117.0", "v2.1116.0", "v2.1115.1"]
-        assert select_current_version(tags) == "2.1117.0"
+    def test_malformed_json_raises(self):
+        """A truncated/empty body must raise, never read as 'nothing published'."""
+        with pytest.raises(ValueError):
+            parse_pypi_version("")
+        with pytest.raises(ValueError):
+            parse_pypi_version("not json")
 
-    def test_no_valid_tags_returns_zero_version(self):
-        """With no semver-valid tags, fall back to 0.0.0 so the first real
-        CDK version is always detected as an update.
+    def test_missing_info_or_version_raises(self):
+        with pytest.raises(ValueError):
+            parse_pypi_version('{"releases": {}}')
+        with pytest.raises(ValueError):
+            parse_pypi_version('{"info": {}}')
+        with pytest.raises(ValueError):
+            parse_pypi_version('{"info": {"version": ""}}')
+
+    def test_non_semver_version_raises(self):
+        """A version PyPI reports that cannot be compared must fail loudly
+        rather than silently become the baseline.
         """
-        assert select_current_version([]) == "0.0.0"
-        assert select_current_version(["not-a-version", "v2.0.0.post3"]) == "0.0.0"
+        with pytest.raises(ValueError):
+            parse_pypi_version('{"info": {"version": "not-a-version"}}')
 
 
 class TestParseNpmVersion:
@@ -89,40 +131,106 @@ class TestIsUpdateAvailable:
     def test_older_latest_is_not_an_update(self):
         assert is_update_available("2.1126.0", "2.1117.0") is False
 
+    def test_compares_numerically_not_lexically(self):
+        """2.1117.0 > 2.199.0 numerically, though '199' sorts after '1117' as a
+        string. Lexical comparison would skip 918 releases.
+        """
+        assert is_update_available("2.199.0", "2.1117.0") is True
+        assert is_update_available("2.1117.0", "2.199.0") is False
+
     def test_invalid_version_raises(self):
         """Garbage in must raise (loud), not be treated as 'no update'."""
         with pytest.raises(ValueError):
             is_update_available("2.1117.0.post1", "2.1126.0")
 
 
+class TestFetchPypiPayload:
+    """Only a 404 may be read as "not published"."""
+
+    def test_returns_body(self):
+        captured = {}
+
+        def fake_opener(url, timeout=None):
+            captured["url"] = url
+            return FakeResponse(b'{"info": {"version": "2.1117.0"}}')
+
+        assert fetch_pypi_payload(opener=fake_opener) == (
+            '{"info": {"version": "2.1117.0"}}'
+        )
+        assert "aws-cdk-cli" in captured["url"]
+
+    def test_404_means_not_published(self):
+        def fake_opener(url, timeout=None):
+            raise http_error(404)
+
+        assert fetch_pypi_payload(opener=fake_opener) is None
+
+    def test_server_error_propagates(self):
+        """A PyPI outage must fail the run. Collapsing it to "not published"
+        would make the baseline 0.0.0 and misreport every live release as
+        missing.
+        """
+        def fake_opener(url, timeout=None):
+            raise http_error(503)
+
+        with pytest.raises(urllib.error.HTTPError):
+            fetch_pypi_payload(opener=fake_opener)
+
+
 class TestDecide:
     """The end-to-end decision the workflow consumes."""
 
-    def test_regression_post_tag_does_not_mask_new_release(self):
-        """The exact bug: a v2.1117.0.post1 tag must not hide that npm has
-        moved on to 2.1126.0. decide() must report the update.
+    def test_regression_release_missing_from_pypi_is_retried(self):
+        """The exact bug this check exists to prevent: a version that was
+        tagged but never published must still be offered for release. The
+        decision reads PyPI only, so a tag cannot record "done" on its behalf.
         """
-        tags = ["v2.1116.0", "v2.1117.0", "v2.1117.0.post1"]
-        npm_payload = '{"version": "2.1126.0"}'
-        result = decide(tags, npm_payload)
+        pypi_payload = '{"info": {"version": "2.1007.1"}}'
+        npm_payload = '{"version": "2.1010.0"}'
+        result = decide(pypi_payload, npm_payload)
         assert result == {
-            "current_version": "2.1117.0",
-            "latest_version": "2.1126.0",
+            "current_version": "2.1007.1",
+            "latest_version": "2.1010.0",
             "has_new_version": True,
         }
 
-    def test_up_to_date(self):
-        tags = ["v2.1126.0"]
+    def test_post_release_does_not_mask_new_upstream_version(self):
+        """A .post1 republish on PyPI must not hide that npm moved on."""
+        pypi_payload = '{"info": {"version": "2.1117.0.post1"}}'
         npm_payload = '{"version": "2.1126.0"}'
-        result = decide(tags, npm_payload)
+        result = decide(pypi_payload, npm_payload)
+        assert result["current_version"] == "2.1117.0"
+        assert result["has_new_version"] is True
+
+    def test_first_release_when_nothing_published(self):
+        result = decide(None, '{"version": "2.1126.0"}')
+        assert result["current_version"] == "0.0.0"
+        assert result["has_new_version"] is True
+
+    def test_up_to_date(self):
+        pypi_payload = '{"info": {"version": "2.1126.0"}}'
+        npm_payload = '{"version": "2.1126.0"}'
+        result = decide(pypi_payload, npm_payload)
         assert result["has_new_version"] is False
         assert result["current_version"] == "2.1126.0"
         assert result["latest_version"] == "2.1126.0"
 
+    def test_post_release_of_current_version_is_not_an_update(self):
+        """A .post1 of the newest upstream version is up to date, not a
+        downgrade and not a new release.
+        """
+        pypi_payload = '{"info": {"version": "2.1126.0.post2"}}'
+        npm_payload = '{"version": "2.1126.0"}'
+        assert decide(pypi_payload, npm_payload)["has_new_version"] is False
+
     def test_malformed_npm_payload_propagates(self):
         """decide() must not swallow a malformed npm response into 'no update'."""
         with pytest.raises(ValueError):
-            decide(["v2.1117.0"], "")
+            decide('{"info": {"version": "2.1117.0"}}', "")
+
+    def test_malformed_pypi_payload_propagates(self):
+        with pytest.raises(ValueError):
+            decide("", '{"version": "2.1126.0"}')
 
 
 class TestWriteGithubOutput:
@@ -177,21 +285,11 @@ class TestFetchNpmPayload:
     """Fetching the registry document over HTTP (no real network in tests)."""
 
     def test_decodes_response_body(self):
-        class FakeResponse:
-            def read(self):
-                return b'{"version": "2.1126.0"}'
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *exc):
-                return False
-
         captured = {}
 
         def fake_opener(url, timeout=None):
             captured["url"] = url
-            return FakeResponse()
+            return FakeResponse(b'{"version": "2.1126.0"}')
 
         body = fetch_npm_payload(opener=fake_opener)
         assert body == '{"version": "2.1126.0"}'
@@ -204,7 +302,7 @@ class TestMain:
     def test_writes_outputs_and_returns_decision(self, tmp_path):
         out = tmp_path / "github_output"
         result = main(
-            tags_provider=lambda: ["v2.1116.0", "v2.1117.0", "v2.1117.0.post1"],
+            pypi_fetcher=lambda: '{"info": {"version": "2.1117.0.post1"}}',
             payload_fetcher=lambda: '{"version": "2.1126.0"}',
             github_output=str(out),
         )
@@ -216,7 +314,7 @@ class TestMain:
     def test_no_github_output_still_returns_decision(self):
         """Run locally (no GITHUB_OUTPUT) must not crash on file writing."""
         result = main(
-            tags_provider=lambda: ["v2.1126.0"],
+            pypi_fetcher=lambda: '{"info": {"version": "2.1126.0"}}',
             payload_fetcher=lambda: '{"version": "2.1126.0"}',
             github_output=None,
         )
@@ -227,7 +325,7 @@ class TestMain:
         out = tmp_path / "github_output"
         with pytest.raises(ValueError):
             main(
-                tags_provider=lambda: ["v2.1117.0"],
+                pypi_fetcher=lambda: '{"info": {"version": "2.1117.0"}}',
                 payload_fetcher=lambda: "",
                 github_output=str(out),
             )

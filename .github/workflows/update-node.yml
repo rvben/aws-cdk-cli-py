@@ -1,0 +1,101 @@
+name: Update bundled Node.js
+
+on:
+  schedule:
+    # Weekly. Node.js LTS patches land far less often than CDK releases, and
+    # this no longer sits on the release path.
+    - cron: '0 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: update-node
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: Update Node.js to the latest LTS patch
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      # This runs on its own schedule rather than inside the CDK release. The
+      # bundled version lives in constants.py, which is both the thing being
+      # updated and the record of having updated it, so a release that bumped
+      # Node and then failed to publish used to leave that bump recorded but
+      # unshipped, and no later run would retry it. Keeping the two apart also
+      # keeps a release reproducible: a rebuild from a tag bundles the Node
+      # version that tag was built with, not whatever is newest today. The next
+      # CDK release picks this commit up.
+      #
+      # Detection is tested Python behind make targets (see
+      # scripts/update_node_version.py) and fails the job loudly: it can no
+      # longer block a CDK release, so there is nothing to soft-skip for.
+      - name: Update to latest LTS patch
+        id: update
+        run: |
+          set -euo pipefail
+          CURRENT=$(make -s node-current-version)
+          LATEST=$(make -s node-latest-version)
+          echo "Current Node.js: ${CURRENT}, latest: ${LATEST}"
+          if [ "$CURRENT" = "$LATEST" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Node.js already up to date."
+            exit 0
+          fi
+          python3 scripts/update_node_version.py "$LATEST"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "version=${LATEST}" >> "$GITHUB_OUTPUT"
+
+      # The script rewrites NODE_VERSION and every per-platform checksum
+      # together, so a half-applied update would leave the version pointing at
+      # binaries the checksums no longer describe, and every download would
+      # fail verification at install time. Reading the version back proves the
+      # write landed rather than trusting the script's exit code; importing the
+      # module proves the file still parses and that the version, the download
+      # URLs and the checksums all agree.
+      - name: Verify the update landed
+        if: steps.update.outputs.changed == 'true'
+        env:
+          EXPECTED: ${{ steps.update.outputs.version }}
+        run: |
+          set -euo pipefail
+          AFTER=$(make -s node-current-version)
+          if [ "$AFTER" != "$EXPECTED" ]; then
+            echo "Error: constants.py reports ${AFTER}, expected ${EXPECTED}" >&2
+            exit 1
+          fi
+          python3 -c "
+          import os
+          from aws_cdk_cli import constants
+          expected = os.environ['EXPECTED']
+          assert constants.NODE_VERSION == expected, constants.NODE_VERSION
+          for system, machines in constants.NODE_URLS.items():
+              for machine, url in machines.items():
+                  assert expected in url, url
+                  assert constants.NODE_CHECKSUMS[system][machine], (system, machine)
+          print(f'constants.py is consistent at {expected}')
+          "
+
+      - name: Commit
+        if: steps.update.outputs.changed == 'true'
+        env:
+          NODE_VERSION: ${{ steps.update.outputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add aws_cdk_cli/constants.py
+          git commit -m "chore: update bundled Node.js to ${NODE_VERSION}"
+          git push origin HEAD:main
+          echo "::notice::Bundled Node.js updated to ${NODE_VERSION}"

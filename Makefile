@@ -62,11 +62,15 @@ build: clean download-cdk
 test: $(VENV)
 	uv run pytest --integration --slow .
 
+# --skip-existing is what makes a retried release converge. A failed release is
+# retried on the next scheduled run, which rebuilds the artifacts; compiled
+# builds are not reproducible, so the new bytes collide with whatever the first
+# attempt already uploaded and PyPI hard-fails the filename, aborting the rest.
 publish-test: $(VENV)
-	twine upload --repository testpypi dist/*
+	twine upload --skip-existing --repository testpypi dist/*
 
 publish-prod: $(VENV)
-	twine upload --repository pypi dist/*
+	twine upload --skip-existing --repository pypi dist/*
 
 verify: $(VENV)
 	rm -rf .venv; uv venv; uv pip install dist/aws_cdk_cli-$(WRAPPER_VERSION).tar.gz && ./.venv/bin/cdk --version --verbose

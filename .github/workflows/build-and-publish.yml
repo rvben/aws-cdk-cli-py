@@ -9,7 +9,20 @@ on:
       version:
         description: 'CDK Version to build and publish'
         required: true
-        default: ''
+        type: string
+  # Called directly by check-cdk-version.yml. Invoking this workflow rather
+  # than relying on a tag push to trigger it is what removes the need for a
+  # personal access token: a push made with the default GITHUB_TOKEN
+  # deliberately does not start another workflow, but a workflow_call does.
+  workflow_call:
+    inputs:
+      version:
+        description: 'CDK Version to build and publish'
+        required: true
+        type: string
+
+permissions:
+  contents: read
 
 jobs:
   test:
@@ -34,19 +47,31 @@ jobs:
         with:
           node-version: '22'
 
+      # Keyed off inputs.version rather than github.event_name: under
+      # workflow_call the event name is the CALLER's event (schedule), so a
+      # push-vs-dispatch test would silently take the wrong branch. The inputs
+      # context is populated for both workflow_dispatch and workflow_call, and
+      # is empty for a tag push.
       - name: Get version from tag or input
         id: get_version
         shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          if [[ "${{ github.event_name }}" == "push" ]]; then
-            VERSION=${GITHUB_REF#refs/tags/v}
+          set -euo pipefail
+          if [ -n "$INPUT_VERSION" ]; then
+            VERSION="$INPUT_VERSION"
           else
-            VERSION="${{ github.event.inputs.version }}"
+            VERSION="${GITHUB_REF#refs/tags/v}"
           fi
-          # Strip PEP 440 suffixes (.post1, .dev1, .rc1) to get the CDK version for npm
-          CDK_VERSION=$(echo "$VERSION" | sed -E 's/\.(post|dev|rc)[0-9]*$//')
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "cdk_version=${CDK_VERSION}" >> $GITHUB_OUTPUT
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\.post[0-9]+)?$ ]]; then
+            echo "Error: '${VERSION}' is not a valid release version" >&2
+            exit 1
+          fi
+          # A .postN release republishes the same upstream CDK version
+          CDK_VERSION="${VERSION%%.post*}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "cdk_version=${CDK_VERSION}" >> "$GITHUB_OUTPUT"
           echo "Wrapper version: ${VERSION}, CDK version: ${CDK_VERSION}"
 
       - name: Install uv
@@ -90,17 +115,26 @@ jobs:
         with:
           node-version: '22'
 
+      # See the note on the same step in the test job: the version must come
+      # from the inputs context, not from github.event_name.
       - name: Get version from tag or input
         id: get_version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          if [[ "${{ github.event_name }}" == "push" ]]; then
-            VERSION=${GITHUB_REF#refs/tags/v}
+          set -euo pipefail
+          if [ -n "$INPUT_VERSION" ]; then
+            VERSION="$INPUT_VERSION"
           else
-            VERSION="${{ github.event.inputs.version }}"
+            VERSION="${GITHUB_REF#refs/tags/v}"
           fi
-          CDK_VERSION=$(echo "$VERSION" | sed -E 's/\.(post|dev|rc)[0-9]*$//')
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "cdk_version=${CDK_VERSION}" >> $GITHUB_OUTPUT
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\.post[0-9]+)?$ ]]; then
+            echo "Error: '${VERSION}' is not a valid release version" >&2
+            exit 1
+          fi
+          CDK_VERSION="${VERSION%%.post*}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "cdk_version=${CDK_VERSION}" >> "$GITHUB_OUTPUT"
           echo "Wrapper version: ${VERSION}, CDK version: ${CDK_VERSION}"
 
       - name: Install build dependencies

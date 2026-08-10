@@ -6,28 +6,29 @@ on:
     - cron: '0 */6 * * *'
   workflow_dispatch:  # Allow manual triggering
 
-# Permissions needed to push tags
 permissions:
-  contents: write  # Needed for pushing tags
+  contents: read
 
-# Serialize runs so a scheduled run and a manual dispatch can never race to
-# create the same tag. A queued run only starts after the active one finishes,
-# so its fresh checkout already contains any tag the previous run pushed and it
-# then exits cleanly as "up to date". Never cancel an in-flight run mid-push.
+# Serialize runs so a scheduled run and a manual dispatch can never release the
+# same version twice. A queued run only starts after the active one finishes,
+# so it sees the publish the previous run made and exits cleanly as "up to
+# date". Never cancel an in-flight run mid-publish.
 concurrency:
   group: check-cdk-updates
   cancel-in-progress: false
 
 jobs:
-  check-version:
+  check:
+    name: Compare published version against upstream
     runs-on: ubuntu-latest
-    timeout-minutes: 5  # Set timeout to avoid wasting minutes
+    timeout-minutes: 5
+    outputs:
+      has_new_version: ${{ steps.check.outputs.has_new_version }}
+      version: ${{ steps.check.outputs.latest_version }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
-        with:
-          fetch-depth: 0  # Fetch all tags and history
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -37,82 +38,54 @@ jobs:
       # Runs the same `make check-cdk-update` target that runs locally.
       # The check is pure Python (no npm/npx); it fails the job on any error
       # rather than silently reporting "no update".
+      #
+      # The already-released version comes from PyPI, not from a git tag. A tag
+      # records "done" the moment it exists, so a run that tagged and then
+      # failed to publish would make that version invisible to every later run,
+      # permanently. Reading PyPI means such a release is simply retried here on
+      # the next run.
       - name: Check for new CDK version
         id: check
         run: make check-cdk-update
 
-      # Only runs these steps if a new version is detected
-      - name: Update Node.js to latest LTS patch
-        if: steps.check.outputs.has_new_version == 'true'
-        run: |
-          # Detection is tested Python behind make targets (see scripts/update_node_version.py).
-          # A Node.js patch must never block a CDK release, so detection failure is a soft skip.
-          CURRENT_NODE=$(make -s node-current-version)
-          LATEST_NODE=$(make -s node-latest-version || true)
+  # Calling the release workflow instead of pushing a tag to trigger it is what
+  # lets this run on the default GITHUB_TOKEN: a token-made push deliberately
+  # does not start another workflow, so a tag-triggered design needs a personal
+  # access token that must be created, stored and rotated by hand.
+  release:
+    name: Release
+    needs: check
+    if: needs.check.outputs.has_new_version == 'true'
+    uses: ./.github/workflows/build-and-publish.yml
+    with:
+      version: ${{ needs.check.outputs.version }}
+    secrets: inherit
 
-          if [ -z "$LATEST_NODE" ]; then
-            echo "::warning::Could not determine latest Node.js version, skipping update"
-            echo "node_updated=false" >> $GITHUB_ENV
+  # The tag records what shipped; it is deliberately not the trigger. Creating
+  # it only after a successful publish keeps a failed release retryable, since
+  # the next run compares against PyPI and finds the version still missing.
+  tag:
+    name: Tag the released commit
+    needs: [check, release]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Create and push tag
+        env:
+          RELEASED_VERSION: ${{ needs.check.outputs.version }}
+        run: |
+          set -euo pipefail
+          if git rev-parse "v${RELEASED_VERSION}" >/dev/null 2>&1; then
+            echo "Tag v${RELEASED_VERSION} already exists, nothing to do."
             exit 0
           fi
-
-          echo "Current Node.js: ${CURRENT_NODE}, Latest: ${LATEST_NODE}"
-
-          if [ "$CURRENT_NODE" != "$LATEST_NODE" ]; then
-            if python3 scripts/update_node_version.py "$LATEST_NODE"; then
-              echo "node_updated=true" >> $GITHUB_ENV
-              echo "node_version=${LATEST_NODE}" >> $GITHUB_ENV
-            else
-              echo "::warning::Node.js update to ${LATEST_NODE} failed, continuing with ${CURRENT_NODE}"
-              git checkout -- aws_cdk_cli/constants.py
-              echo "node_updated=false" >> $GITHUB_ENV
-            fi
-          else
-            echo "Node.js already up to date"
-            echo "node_updated=false" >> $GITHUB_ENV
-          fi
-
-      - name: Configure Git
-        if: steps.check.outputs.has_new_version == 'true'
-        run: |
-          git config user.name "GitHub Actions Bot"
-          git config user.email "actions@github.com"
-
-      - name: Commit Node.js update
-        if: steps.check.outputs.has_new_version == 'true' && env.node_updated == 'true'
-        run: |
-          git add aws_cdk_cli/constants.py
-          git commit -m "chore: update bundled Node.js to ${node_version}"
-          git push https://${{ secrets.GH_PAT }}@github.com/${GITHUB_REPOSITORY}.git HEAD:main
-
-      - name: Create and push tag
-        if: steps.check.outputs.has_new_version == 'true'
-        run: |
-          NEW_VERSION="${{ steps.check.outputs.latest_version }}"
-          echo "Creating tag v${NEW_VERSION}"
-
-          # Create and push the tag with PAT to trigger other workflows
-          git tag -a "v${NEW_VERSION}" -m "AWS CDK version ${NEW_VERSION}"
-          git push https://${{ secrets.GH_PAT }}@github.com/${GITHUB_REPOSITORY}.git "v${NEW_VERSION}"
-
-      - name: Trigger build-and-publish workflow
-        if: steps.check.outputs.has_new_version == 'true'
-        env:
-          GH_PAT: ${{ secrets.GH_PAT }}
-          REPO: ${{ github.repository }}
-          VERSION: ${{ steps.check.outputs.latest_version }}
-        run: |
-          curl -X POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer $GH_PAT" \
-            -H "Content-Type: application/json" \
-            https://api.github.com/repos/$REPO/actions/workflows/build-and-publish.yml/dispatches \
-            -d '{
-              "ref": "refs/tags/v'$VERSION'",
-              "inputs": {"version": "'$VERSION'"}
-            }'
-
-      - name: Create Release Info
-        if: steps.check.outputs.has_new_version == 'true'
-        run: |
-          echo "::notice::Created new tag v${{ steps.check.outputs.latest_version }} for AWS CDK update"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "v${RELEASED_VERSION}" -m "AWS CDK version ${RELEASED_VERSION}"
+          git push origin "refs/tags/v${RELEASED_VERSION}"
+          echo "::notice::Tagged v${RELEASED_VERSION}"
