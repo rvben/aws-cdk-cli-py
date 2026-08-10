@@ -1,0 +1,54 @@
+name: CI
+
+# The test suite is the only gate on the release path, and until now it ran
+# nowhere else: a break was discovered when a CDK version was already due to
+# ship, against a commit that could be weeks old. This runs the same make
+# targets on every push so the break lands on the change that caused it.
+#
+# Deliberately narrower than the release: one OS and the two Python versions
+# the release matrix spans, rather than the full 3x2 grid. The release still
+# runs everything before publishing.
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test on Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.10', '3.13']
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Install uv
+        run: pip install uv
+
+      # CDK_VERSION defaults to the current upstream release, so no version
+      # needs threading in here the way the release path threads one from its
+      # tag.
+      - name: Download CDK and Node.js binaries
+        run: make download-cdk
+
+      - name: Test
+        run: make test
